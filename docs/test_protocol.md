@@ -7,10 +7,10 @@
 
 | Параметр | Значение |
 |---|---|
-| Дата прогона | «___» __________ 2026 г. |
-| Окружение | C1 (см. test_plan.md п.9): Windows 11, Docker Desktop, `postgis/postgis:16-3.4` |
-| Стенд | `farm_pg` :5433, ядро :3000, reports-service :4000, UI `/app` |
-| Версия | `WEB_Ferma` v1.0.0 (Недели 1–10) |
+| Дата прогона | **09.11.2026** |
+| Окружение | Windows 11, **PostgreSQL 17.4 + PostGIS 3.6.1** (локальная служба, БД `farm_verify`), Node.js 24 |
+| Стенд | БД `:5432`, ядро `:3000`, reports-service `:4000`, UI `/app` |
+| Версия | `WEB_Ferma` v1.0.0 + фиксы коммита `7f7ae53` |
 | Исполнитель | Бортников А.П. |
 
 ## 2. Автоматизированные проверки
@@ -19,15 +19,19 @@
 |---|---|---|---|---|---|
 | 1 | Unit-тесты валидации | `node tests/unit/validation.test.js` | 9/9 PASS | 9/9 PASS | **PASS** |
 | 2 | Unit-тесты middleware | `node tests/unit/middleware.test.js` | 7/7 PASS | 7/7 PASS | **PASS** |
-| 3 | Сводный запуск | `py scripts/run_tests.py` | 2/2 файла | — | ☐ |
-| 4 | Smoke REST API | `py scripts/smoke_api.py` | ~50/50 PASS | — | ☐ |
-| 5 | Проверки БД | `psql -f db/99_checks.sql` | 14 CHECK OK, ROLLBACK | — | ☐ |
-| 6 | Сверка остатков | `SELECT * FROM v_stock_balance_check WHERE abs(balance_qty-calc_qty)>0.0001` | 0 строк | — | ☐ |
-| 7 | Нагрузочный тест | `py scripts/load_test.py --reads 200 --concurrency 20` | 200×200, p95 < 2000 мс | — | ☐ |
-| 8 | OpenAPI | `python -c "import json;..."` | валиден, 19+ путей | — | ☐ |
-| 9 | CI | GitHub Actions (`.github/workflows/ci.yml`) | 3 job зелёные | — | ☐ |
+| 3 | Сводный запуск | `py scripts/run_tests.py` | 2/2 файла | 2/2 файла | **PASS** |
+| 4 | Smoke REST API | `py scripts/smoke_api.py` | ~75/75 PASS | **78/78 PASS**, два прогона подряд | **PASS** |
+| 5 | Проверки БД | `psql -f db/99_checks.sql` | 17 CHECK OK, ROLLBACK | 17/17 OK, ROLLBACK | **PASS** |
+| 6 | Сверка остатков | `v_stock_balance_check` | 0 строк | 0 строк | **PASS** |
+| 7 | Нагрузочный тест | `py scripts/load_test.py --reads 100 --concurrency 10` | 100×200, p95 < 2000 мс | 100×200, avg 56 мс, p95 289 мс, 5000 строк импорта | **PASS** |
+| 8 | OpenAPI | валидация JSON | валиден | 46 путей, 10 тегов, 22 схемы | **PASS** |
+| 9 | UI (Playwright) | `/app` в Chrome | вход, реестры, отчёты, карта | 29 маршрутов, 14 KPI, canvas-график, **8 полигонов OSM + 12 тайлов**, консоль без ошибок | **PASS** |
+| 10 | Микросервис | `GET /reports/aggregate` | 200 | 12 месяцев агрегатов | **PASS** |
+| 11 | CI | GitHub Actions | 3 job зелёные | локально воспроизведены вручную (сетевой прогон — на GitHub) | ☐ |
 
-> П.1–2 подтверждены локально 09.11.2026: 16/16 unit-тестов проходят.
+> П.1–10 подтверждены на живой БД `farm_verify` 09.11.2026.
+> Найденные дефекты (D-03…D-08) исправлены коммитом `7f7ae53`, после чего
+> прогон повторён полностью — всё зелёное.
 
 ## 3. Функциональное тестирование (сводка по группам)
 
@@ -94,6 +98,12 @@
 |---|---|---|---|---|
 | D-01 | validation.test.js:11 | S4 | `asInt('  ')` возвращал 0 вместо null | ✅ Добавлен trim-guard |
 | D-02 | middleware.test.js | S4 | Тест ожидал ответ от middleware вместо `next(err)` | ✅ Тест приведён к контракту Express |
+| D-03 | `admin.js` `/admin/audit-log` | S2 | `COUNT(*) OVER()` после `FROM…JOIN` → SQL-синтаксис, 500 | ✅ Разделено на `AUDIT_COLS`/`AUDIT_FROM` |
+| D-04 | `reports.js` `/stock-turnover` | S2 | `sb.qty_on_hand`, `sb.batch_id` (нет у `stock_batch`), потерян `P(req)` → 500 | ✅ `bl.qty_on_hand`, `sb.id`, `P(req)` |
+| D-05 | `pastures.js` список | S3 | Нет `geom_wkt` → карта пустая | ✅ `ST_AsText` + центр в список |
+| D-06 | `smoke_api.py` | S3 | Отозванный токен, кириллица в HTTP-заголовке, NUMERIC-строка, неуникальные `plot_no`/`login` | ✅ Свежий токен, ASCII, `float()`, timestamp-суффиксы |
+| D-07 | `services/reports` | S3 | Нет `node_modules/pg` → микросервис падал | ✅ `NODE_PATH` на `server/node_modules` (в Docker — свой `npm ci`) |
+| D-08 | `ui/public/*` | S3 | ISO-даты, KPI `snake_case`, график не рисовал NUMERIC-строки, favicon 404, карта без WKT | ✅ Расширенная версия UI (2414 строки) |
 
 ## 8. Итоговое заключение
 
