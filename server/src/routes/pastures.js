@@ -36,6 +36,10 @@ const MOVE_SPECS = {
 
 const PLOT_COLS = `p.id, p.plot_no, p.name, p.area_ha, p.vegetation_type,
                    p.max_head_per_ha, p.rest_days_required, p.is_active, p.is_deleted`;
+// Для списка/карточки добавляем геометрию: UI (Leaflet) рисует полигоны из WKT.
+const PLOT_COLS_FULL = `${PLOT_COLS}, ST_AsText(p.geom) AS geom_wkt,
+                        ST_Y(ST_Centroid(p.geom)) AS center_lat,
+                        ST_X(ST_Centroid(p.geom)) AS center_lon`;
 
 /** GET /api/v1/pasture-plots — участки + текущая загрузка (активные головы) */
 router.get('/pasture-plots', requirePermission('pasture:READ', 'pasture'), async (req, res, next) => {
@@ -58,7 +62,7 @@ router.get('/pasture-plots', requirePermission('pasture:READ', 'pasture'), async
         const whereSql = `WHERE ${where.join(' AND ')}`;
 
         const { rows } = await query(
-            `SELECT ${PLOT_COLS},
+            `SELECT ${PLOT_COLS_FULL},
                     (SELECT COALESCE(SUM(head_count_snapshot), 0) FROM grazing_event ge
                       WHERE ge.plot_id = p.id AND ge.ended_at IS NULL) AS active_head_count,
                     COUNT(*) OVER() AS total
@@ -79,7 +83,7 @@ router.get('/pasture-plots/:id', requirePermission('pasture:READ', 'pasture'), a
         const id = asInt(req.params.id);
         if (id == null) throw httpError(400, 'Некорректный id');
         const { rows } = await query(
-            `SELECT ${PLOT_COLS}, ST_AsText(p.geom) AS geom_wkt,
+            `SELECT ${PLOT_COLS_FULL},
                     (SELECT COALESCE(SUM(head_count_snapshot), 0) FROM grazing_event ge
                       WHERE ge.plot_id = p.id AND ge.ended_at IS NULL) AS active_head_count
              FROM pasture_plot p WHERE p.id = $1`, [id]);

@@ -179,11 +179,17 @@ def main():
     # 14. аудит DENY записан (проверка через БД)
     check_audit_deny()
 
+    # Токен director был отозван шагом 13 (logout) — получаем свежий для
+    # проверок Недель 5–8, иначе все последующие вызовы дадут 401.
+    s, b = call("POST", "/auth/login", {"login": "director", "password": "demo1234"})
+    tok2 = b.get("token") if s == 200 else None
+    check("повторный login director 200", s == 200 and bool(tok2), (s, b))
+
     # 15. Неделя 5: справочники, склад (атомарность/откат), задачи, пастбища
-    week5_checks(vtok, stok)
+    week5_checks(tok2, vtok, stok)
 
     # 15b. Недели 6–8: администрирование, журналы, отчёты, усиленный аудит
-    week6_8_checks(tok, sutok)
+    week6_8_checks(tok2, sutok)
 
     # 16. уборка за прогоном: тестовые карточки и движения склада
     cleanup_demo_data()
@@ -233,14 +239,15 @@ def week6_8_checks(tok, sutok):
     check("director GET /tech/log 403", s == 403, (s, b))
 
     # Усиленный аудит: суперпользователь без X-Override-Reason -> 428
-    s, b = call("POST", "/admin/users",
-                {"login": "smoke_user", "password": "Passw0rd1", "full_name": "Тест",
-                 "role_id": first_id("SELECT id FROM role WHERE code='VET'")}, token=sutok)
+    # login уникален в БД (в т.ч. для мягко удалённых) — уникализируем прогон.
+    smoke_login = "smoke_u%d" % (int(time.time()) % 100000)
+    role_vet = first_id("SELECT id FROM role WHERE code='VET'")
+    user_body = {"login": smoke_login, "password": "Passw0rd1",
+                 "full_name": "Тест", "role_id": role_vet}
+    s, b = call("POST", "/admin/users", user_body, token=sutok)
     check("superuser POST /admin/users без причины 428", s == 428, (s, b))
-    s, b = call("POST", "/admin/users",
-                {"login": "smoke_user", "password": "Passw0rd1", "full_name": "Тест",
-                 "role_id": first_id("SELECT id FROM role WHERE code='VET'")},
-                token=sutok, headers={"X-Override-Reason": "SMOKE: проверка усиленного аудита"})
+    s, b = call("POST", "/admin/users", user_body,
+                token=sutok, headers={"X-Override-Reason": "SMOKE elevated audit check"})
     check("superuser POST /admin/users с причиной 201", s == 201, (s, b))
     new_uid = (b.get("data") or {}).get("id")
     if new_uid:
@@ -249,7 +256,7 @@ def week6_8_checks(tok, sutok):
         check("audit_log содержит is_elevated с причиной", s == 200 and any(
             (r.get("is_elevated") and r.get("override_reason")) for r in b.get("data", [])), (s, b))
         s, b = call("DELETE", "/admin/users/%s" % new_uid, token=sutok,
-                    headers={"X-Override-Reason": "SMOKE: уборка тестового пользователя"})
+                    headers={"X-Override-Reason": "SMOKE cleanup of test user"})
         check("DELETE /admin/users/:id 200", s == 200, (s, b))
 
     # ---- Неделя 8: отчёты ----
@@ -261,8 +268,12 @@ def week6_8_checks(tok, sutok):
     check("GET /reports/cost-fcr?format=csv 200", s == 200, (s, str(b)[:120]))
 
 
-def week5_checks(vtok, stok):
-    """Проверки Недели 5: справочники, склад, задачи, пастбища."""
+def week5_checks(dtok, vtok, stok):
+    """Проверки Недели 5: справочники, склад, задачи, пастбища.
+
+    dtok (director) нужен для записи справочников: после Недели 6 право
+    catalog:WRITE есть у DIRECTOR/SUPERUSER, но не у VET/FOREMAN.
+    """
     # токен бригадира (task:WRITE, pasture:READ/WRITE, stock:WRITE, group:WRITE)
     s, b = call("POST", "/auth/login", {"login": "foreman", "password": "demo1234"})
     ftok = b.get("token") if s == 200 else None
@@ -273,12 +284,12 @@ def week5_checks(vtok, stok):
     check("GET /species 200", s == 200 and isinstance(b.get("data"), list), (s, b))
     s, b = call("GET", "/breeds", token=vtok)
     check("GET /breeds 200", s == 200, (s, b))
-    s, b = call("POST", "/species", {"code": "SMOKE", "name": "СМОК-вид", "zzz": 1}, token=vtok)
+    s, b = call("POST", "/species", {"code": "SMOKE", "name": "СМОК-вид", "zzz": 1}, token=dtok)
     check("POST /species неизвестное поле 400", s == 400, (s, b))
-    s, b = call("POST", "/species", {"code": "SMOKE", "name": "СМОК-вид"}, token=vtok)
+    s, b = call("POST", "/species", {"code": "SMOKE", "name": "СМОК-вид"}, token=dtok)
     check("POST /species создан 201", s == 201, (s, b))
     sp_id = (b.get("data") or {}).get("id")
-    s, b = call("DELETE", "/species/%s" % sp_id, token=vtok)
+    s, b = call("DELETE", "/species/%s" % sp_id, token=dtok)
     check("DELETE /species 200", s == 200, (s, b))
 
     # ---- Склад ----
@@ -325,11 +336,19 @@ def week5_checks(vtok, stok):
     s, b = call("GET", "/pasture-plots", token=ftok)
     check("GET /pasture-plots 200", s == 200 and isinstance(b.get("data"), list), (s, b))
     wkt = "POLYGON((37.0 55.0, 37.001 55.0, 37.001 55.001, 37.0 55.001, 37.0 55.0))"
-    s, b = call("POST", "/pasture-plots", {"plot_no": "SMOKE-P1", "name": "СМОК участок", "max_head_per_ha": 2, "geom_wkt": wkt}, token=ftok)
+    # plot_no уникален в БД (в т.ч. для мягко удалённых) — добавляем timestamp,
+    # чтобы повторные прогоны не падали на 409 до финальной уборки.
+    plot_no = "SMOKE-P%d" % (int(time.time()) % 100000)
+    s, b = call("POST", "/pasture-plots", {"plot_no": plot_no, "name": "СМОК участок", "max_head_per_ha": 2, "geom_wkt": wkt}, token=ftok)
     check("POST /pasture-plots 201 (площадь триггером)", s == 201, (s, b))
     plot_id = (b.get("data") or {}).get("id")
     area = (b.get("data") or {}).get("area_ha")
-    check("area_ha рассчитана > 0", isinstance(area, (int, float)) and area > 0, area)
+    # pg отдаёт NUMERIC как строку — приводим к числу
+    try:
+        area = float(area)
+    except (TypeError, ValueError):
+        area = None
+    check("area_ha рассчитана > 0", isinstance(area, float) and area > 0, area)
     s, b = call("POST", "/grazing/move", {"group_id": 999999, "plot_id": plot_id}, token=ftok)
     check("grazing/move несуществующая группа 400", s == 400, (s, b))
     s, b = call("DELETE", "/pasture-plots/%s" % plot_id, token=ftok)
@@ -347,13 +366,15 @@ def psql_cmd(extra=None, stdin_mode=False):
     import shutil
     import subprocess
     mode = os.environ.get("FARM_PSQL_MODE", "docker")
+    user = os.environ.get("PGUSER", "farm")
+    database = os.environ.get("PGDATABASE", "farm")
     if mode != "local" and shutil.which("docker"):
         base = ["docker", "exec"] + (["-i"] if stdin_mode else []) + [
-            "farm_pg", "psql", "-U", "farm", "-d", "farm"]
+            "farm_pg", "psql", "-U", user, "-d", database]
     else:
         base = ["psql", "-h", os.environ.get("PGHOST", "localhost"),
                 "-p", os.environ.get("PGPORT", "5433"),
-                "-U", "farm", "-d", "farm"]
+                "-U", user, "-d", database]
     return base + (extra or [])
 
 
@@ -395,6 +416,8 @@ DELETE FROM task_execution WHERE task_id IN (SELECT id FROM task WHERE title LIK
 DELETE FROM task WHERE title LIKE 'SMOKE%';
 DELETE FROM grazing_event WHERE note LIKE 'SMOKE%';
 DELETE FROM pasture_plot WHERE plot_no LIKE 'SMOKE%';
+DELETE FROM user_session WHERE user_id IN (SELECT id FROM app_user WHERE login LIKE 'smoke_u%');
+DELETE FROM app_user WHERE login LIKE 'smoke_u%';
 -- восстановить остатки: qty_on_hand = initial_qty +/- движения
 UPDATE stock_balance b
    SET qty_on_hand = sb.initial_qty + COALESCE((

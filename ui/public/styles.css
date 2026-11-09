@@ -168,6 +168,7 @@ html {
 body {
   margin: 0;
   min-height: 100vh;
+  overflow-x: clip;
   font-family: var(--font);
   font-size: var(--fs-base);
   line-height: var(--lh-base);
@@ -1771,16 +1772,48 @@ html, body { font-family: var(--font); background-color: var(--bg); color: var(-
 }
 .nav-note code { color: var(--ink-soft); }
 
-/* Свёрнутое меню (≤1200px): текст навигации и примечания скрываем */
+/* Свёрнутое меню (≤1200px): остаются только иконки-аббревиатуры.
+   В разметке текст лежит прямо в <a>, без обёртки .nav-text, поэтому
+   скрываем текстовый узел через font-size:0 и показываем буквы из data-view. */
 @media (max-width: 1200px) {
+  .sidebar { overflow-x: hidden; }
   .sidebar .nav-group-title, .sidebar .nav-note { display: none; }
-  .nav-list .nav-link { justify-content: center; padding: var(--u-1); }
+  .nav-list .nav-link {
+    justify-content: center;
+    padding: var(--u-1);
+    font-size: 0;
+    overflow: hidden;
+  }
+  .nav-list .nav-link::after {
+    content: attr(data-view);
+    display: inline-block;
+    width: 3ch;
+    max-width: 3ch;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: clip;
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 1.2;
+    letter-spacing: 0;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+    font-family: var(--font-mono);
+    text-align: center;
+  }
+  .nav-list .nav-link.active::after { color: var(--dark); }
+  .nav-list .nav-link.active::before { left: -8px; }
   .nav-group + .nav-group { padding-top: var(--u-2); border-top: 1px solid var(--line); }
 }
-/* В drawer (≤900px) возвращаем подписи */
+/* В drawer (≤900px) возвращаем полные подписи */
 @media (max-width: 900px) {
   .sidebar .nav-group-title, .sidebar .nav-note { display: block; }
-  .nav-list .nav-link { justify-content: flex-start; padding: var(--u-1) var(--u-2); }
+  .nav-list .nav-link {
+    justify-content: flex-start;
+    padding: var(--u-1) var(--u-2);
+    font-size: var(--fs-sm);
+  }
+  .nav-list .nav-link::after { content: none; }
   .nav-group + .nav-group { padding-top: 0; border-top: 0; }
 }
 
@@ -1929,8 +1962,13 @@ html, body { font-family: var(--font); background-color: var(--bg); color: var(-
 }
 .hotkeys-hint { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 4px; }
 @media (max-width: 600px) {
-  .hotkeys-bar { margin-left: calc(-1 * var(--u-2)); margin-right: calc(-1 * var(--u-2)); padding: var(--u-1) var(--u-2); }
-  .hotkeys-hint { font-size: 10px; }
+  .hotkeys-bar {
+    width: 100%;
+    margin-left: 0;
+    margin-right: 0;
+    padding: var(--u-1) var(--u-2);
+  }
+  .hotkeys-hint { font-size: 10px; min-width: 0; }
 }
 
 /* --- Модальное окно (реальная структура: .modal > .modal-backdrop + .modal-dialog) --- */
@@ -2054,4 +2092,116 @@ body.has-modal { overflow: hidden; }
   .toast-stack, .modal, .help-dialog, .page-actions, .map-container,
   .chart-panel { display: none !important; }
   .content, .main { margin: 0 !important; padding: 0 !important; }
+}
+
+/* ==========================================================================
+   24. Алиасы имён, которые генерирует app.js
+   --------------------------------------------------------------------------
+   JS создаёт: .toast-{ok|err|warn|info}, .loading, .status-* (нижний регистр),
+   .open на #sidebar, td[data-label] для карточного режима.
+   ========================================================================== */
+
+/* Тосты: короткие коды вида */
+.toast-ok, .toast-success { border-left-color: var(--green); }
+.toast-err, .toast-error { border-left-color: var(--danger); }
+.toast-warn, .toast-warning { border-left-color: var(--accent); }
+.toast-info { border-left-color: var(--info); }
+.toast-ok::before, .toast-err::before, .toast-warn::before, .toast-info::before {
+  content: "";
+  flex: 0 0 8px; width: 8px; height: 8px;
+  margin-top: 5px;
+  border-radius: 50%;
+  background: currentColor;
+  color: var(--green);
+}
+.toast-err::before { color: var(--danger); }
+.toast-warn::before { color: var(--accent); }
+.toast-info::before { color: var(--info); }
+
+/* Состояние загрузки в #view */
+.loading {
+  display: flex; align-items: center; justify-content: center; gap: var(--u-2);
+  min-height: 180px;
+  padding: var(--u-4);
+  color: var(--ink-muted);
+  font-size: var(--fs-sm);
+  background: var(--surface);
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--r);
+}
+.loading::before {
+  content: "";
+  width: 18px; height: 18px;
+  flex: 0 0 18px;
+  border: 2px solid var(--line-strong);
+  border-top-color: var(--green);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+/* Бейджи статусов из БД: status-здоров, status-на_лечении, status-падёж
+   и латинские варианты. Регистр и подчёркиваниеNormalized ниже. */
+.badge[class*="status-"] { text-transform: none; letter-spacing: 0.02em; }
+
+.status-здоров, .status-healthy,
+.status-здорово, .status-active, .status-done, .status-выполнена,
+.status-completed, .status-ok, .status-ok2 {
+  background: var(--status-healthy-bg);
+  border-color: var(--status-healthy);
+  color: var(--status-healthy);
+}
+.status-на_лечении, .status-на_лечениии, .status-treatment,
+.status-в_работе, .status-in_work, .status-in-progress, .status-pending,
+.status-ожидает, .status-отдых, .status-rest, .status-quarantine,
+.status-карантин, .status-warn {
+  background: var(--status-treatment-bg);
+  border-color: var(--status-treatment);
+  color: var(--status-treatment);
+}
+.status-падёж, .status-падеж, .status-dead, .status-death,
+.status-выбытие, .status-disposed, .status-cancelled, .status-canceled,
+.status-отменена, .status-overdue, .status-просрочена, .status-failed,
+.status-error, .status-deny, .status-отказ {
+  background: var(--status-dead-bg);
+  border-color: var(--status-dead);
+  color: var(--status-dead);
+}
+
+/* Менее жёсткая рамка у всех status-бейджей — читается как «штамп» */
+.badge[class*="status-"] { border-width: 1px; border-style: solid; }
+
+/* Drawer: app.js добавляет класс .open, а не .is-open */
+.sidebar.open { transform: translateX(0); }
+
+/* Кнопка-карандаш в последней колонке таблицы */
+.data-table .cell-actions .btn-sm,
+.data-table td:last-child .btn-sm { min-width: 28px; padding: 2px 6px; }
+
+/* Подсказка в доп. фильтрах выпаса */
+.filters-extra .hint {
+  display: block;
+  margin-bottom: var(--u-1);
+  font-size: var(--fs-xs);
+  font-weight: 650;
+  color: var(--ink-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.filters-extra { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--u-2); }
+.filters-extra .hint { flex: 1 1 100%; }
+.filters-extra .field-input { flex: 1 1 160px; width: auto; }
+.filters-extra .btn { flex: 0 0 auto; }
+
+/* Кнопка экспорта CSV под таблицей отчёта */
+.view > .btn { margin-top: var(--u-2); }
+
+/* Тёмная тема: canvas-график рисуется фиксированными цветами в app.js,
+   поэтому даём ему светлый «лист» даже в тёмной теме */
+[data-theme="dark"] .chart-wrap canvas {
+  background: var(--surface-sunken);
+  border-radius: var(--r-sm);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .loading::before, .help-dialog[open], .modal-dialog { animation: none; }
 }

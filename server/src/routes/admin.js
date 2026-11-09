@@ -352,13 +352,13 @@ function auditWhere(req) {
     return { whereSql: where.length ? `WHERE ${where.join(' AND ')}` : '', params };
 }
 
-const AUDIT_SELECT = `SELECT a.id, a.occurred_at, a.user_id, u.login, u.full_name,
-                             r.code AS role_code, a.entity_name, a.entity_id, a.action,
-                             a.before_json, a.after_json, a.ip::text AS ip, a.user_agent,
-                             a.is_elevated, a.override_reason
-                      FROM audit_log a
-                      JOIN app_user u ON u.id = a.user_id
-                      JOIN role r ON r.id = u.role_id`;
+const AUDIT_COLS = `a.id, a.occurred_at, a.user_id, u.login, u.full_name,
+                    r.code AS role_code, a.entity_name, a.entity_id, a.action,
+                    a.before_json, a.after_json, a.ip::text AS ip, a.user_agent,
+                    a.is_elevated, a.override_reason`;
+const AUDIT_FROM = `FROM audit_log a
+                    JOIN app_user u ON u.id = a.user_id
+                    JOIN role r ON r.id = u.role_id`;
 
 /** GET /admin/audit-log — журнал бизнес-аудита */
 router.get('/audit-log', requirePermission('audit:READ', 'audit_log'), async (req, res, next) => {
@@ -366,7 +366,7 @@ router.get('/audit-log', requirePermission('audit:READ', 'audit_log'), async (re
         const { limit, offset } = parsePaging(req.query);
         const { whereSql, params } = auditWhere(req);
         const { rows } = await query(
-            `${AUDIT_SELECT}, COUNT(*) OVER() AS total ${whereSql.replace(/^(WHERE)/, '$1')}
+            `SELECT ${AUDIT_COLS}, COUNT(*) OVER() AS total ${AUDIT_FROM} ${whereSql}
              ORDER BY a.occurred_at DESC, a.id DESC
              LIMIT $${params.length + 1}::int OFFSET $${params.length + 2}::int`,
             [...params, limit, offset]);
@@ -388,7 +388,7 @@ router.get('/audit-log/export', requirePermission('export:EXEC', 'audit_log'), a
     try {
         const { whereSql, params } = auditWhere(req);
         const { rows } = await query(
-            `${AUDIT_SELECT} ${whereSql} ORDER BY a.occurred_at DESC, a.id DESC LIMIT 10000`, params);
+            `SELECT ${AUDIT_COLS} ${AUDIT_FROM} ${whereSql} ORDER BY a.occurred_at DESC, a.id DESC LIMIT 10000`, params);
         const head = ['id', 'occurred_at', 'login', 'full_name', 'role_code', 'entity_name',
                       'entity_id', 'action', 'before_json', 'after_json', 'ip', 'user_agent',
                       'is_elevated', 'override_reason'];

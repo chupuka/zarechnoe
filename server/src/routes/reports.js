@@ -212,10 +212,10 @@ router.get('/stock-turnover', requirePermission('report:READ', 'report'), async 
         const { rows } = await query(
             `SELECT n.id AS nomenclature_id, n.sku, n.name, n.category,
                     n.min_threshold, u.code AS uom,
-                    COALESCE(SUM(sb.qty_on_hand), 0) AS on_hand,
+                    COALESCE(SUM(bl.qty_on_hand), 0) AS on_hand,
                     COALESCE(SUM(CASE WHEN mt.direction = 'IN' THEN sm.qty ELSE 0 END), 0) AS received,
                     COALESCE(SUM(CASE WHEN mt.direction = 'OUT' THEN sm.qty ELSE 0 END), 0) AS issued,
-                    COUNT(DISTINCT sb.batch_id)::int AS batches,
+                    COUNT(DISTINCT sb.id)::int AS batches,
                     MIN(sb.expiry_date) AS nearest_expiry
              FROM nomenclature n
              JOIN uom u ON u.id = n.uom_id
@@ -227,7 +227,7 @@ router.get('/stock-turnover', requirePermission('report:READ', 'report'), async 
                AND ($1::date IS NULL OR sm.moved_at IS NULL OR sm.moved_at >= $1::date)
                AND ($2::date IS NULL OR sm.moved_at IS NULL OR sm.moved_at < ($2::date + interval '1 day'))
              GROUP BY n.id, n.sku, n.name, n.category, n.min_threshold, u.code
-             ORDER BY n.sku`);
+             ORDER BY n.sku`, P(req));
         const data = rows.map((r) => {
             const onHand = Number(r.on_hand);
             const min = Number(r.min_threshold);
