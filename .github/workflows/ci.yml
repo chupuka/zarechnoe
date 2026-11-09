@@ -1,0 +1,104 @@
+name: CI — ИС «Заречное»
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  unit-tests:
+    name: Unit-тесты (validation / middleware)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '22', cache: 'npm', cache-dependency-path: WEB_Ferma/server/package-lock.json }
+      - name: Установка зависимостей ядра
+        run: cd WEB_Ferma/server && npm ci
+      - name: Проверка синтаксиса исходников
+        run: |
+          cd WEB_Ferma/server
+          for f in $(find src -name '*.js'); do node --check "$f" || exit 1; done
+          node --check ../services/reports/index.js
+      - name: Unit-тесты (16 проверок)
+        run: |
+          cd WEB_Ferma
+          for f in tests/unit/*.test.js; do node "$f" || exit 1; done
+      - name: Валидация OpenAPI / JSON
+        run: |
+          cd WEB_Ferma
+          python -c "import json; d=json.load(open('server/src/openapi.json',encoding='utf-8')); print('paths:', len(d['paths']))"
+          python -c "import json; json.load(open('services/reports/package.json',encoding='utf-8')); print('reports package OK')"
+
+  db-checks:
+    name: Проверка БД (14 сценариев)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_USER: farm
+          POSTGRES_PASSWORD: farm
+          POSTGRES_DB: farm
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U farm -d farm"
+          --health-interval 5s --health-timeout 3s --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Загрузка схемы (порядок файлов важен)
+        env: { PGPASSWORD: farm }
+        run: |
+          cd WEB_Ferma/db
+          for f in 01_schema.sql 02_views.sql 03_functions_triggers.sql 04_seed_demo.sql 05_procedures.sql; do
+            psql -h localhost -p 5432 -U farm -d farm -v ON_ERROR_STOP=1 -1 -f "$f" || exit 1
+          done
+      - name: 14 проверочных сценариев (BEGIN…ROLLBACK)
+        env: { PGPASSWORD: farm }
+        run: psql -h localhost -p 5432 -U farm -d farm -v ON_ERROR_STOP=1 -f WEB_Ferma/db/99_checks.sql
+      - name: Структурная документация
+        env: { PGHOST: localhost, PGPORT: 5432, PGUSER: farm, PGPASSWORD: farm, PGDATABASE: farm }
+        run: cd WEB_Ferma && python scripts/generate_db_doc.py
+
+  api-smoke:
+    name: Smoke-тест REST API (~50 проверок)
+    runs-on: ubuntu-latest
+    needs: db-checks
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4
+        env: { POSTGRES_USER: farm, POSTGRES_PASSWORD: farm, POSTGRES_DB: farm }
+        ports: ['5433:5432']
+        options: >-
+          --health-cmd "pg_isready -U farm -d farm"
+          --health-interval 5s --health-timeout 3s --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '22', cache: 'npm', cache-dependency-path: WEB_Ferma/server/package-lock.json }
+      - name: Загрузка БД
+        env: { PGPASSWORD: farm }
+        run: |
+          cd WEB_Ferma/db
+          for f in 01_schema.sql 02_views.sql 03_functions_triggers.sql 04_seed_demo.sql 05_procedures.sql; do
+            psql -h localhost -p 5433 -U farm -d farm -v ON_ERROR_STOP=1 -1 -f "$f" || exit 1
+          done
+      - name: Запуск ядра
+        run: |
+          cd WEB_Ferma/server
+          npm ci
+          node src/index.js > /tmp/api.log 2>&1 &
+          echo $! > /tmp/api.pid
+          for i in $(seq 1 30); do
+            curl -sf http://127.0.0.1:3000/api/v1/health > /dev/null && break
+            sleep 1
+          done
+          curl -s http://127.0.0.1:3000/api/v1/health
+      - name: Smoke-тест
+        env: { FARM_PSQL_MODE: local, PGHOST: localhost, PGPORT: '5433', PGPASSWORD: farm }
+        run: cd WEB_Ferma && python scripts/smoke_api.py
+      - name: Логи сервера при падении
+        if: failure()
+        run: cat /tmp/api.log

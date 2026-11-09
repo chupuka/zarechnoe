@@ -1,0 +1,44 @@
+# Зависимости
+node_modules/
+**/node_modules/
+npm-debug.log*
+package-lock.json.bak
+
+# Резервные копии и дампы (ТЗ: не публиковать персональные данные)
+backups/
+*.dump
+*.sha256
+*.sql.gz
+
+# Переменные окружения и секреты
+.env
+.env.*
+*.pem
+*.key
+
+# Логи
+*.log
+server/server.log
+logs/
+
+# Временные файлы
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.DS_Store
+Thumbs.db
+*.tmp
+
+# Сгенерированные артефакты (пересоздаются скриптами)
+docs/server_api.md
+docs/db_structure.md
+*.csv
+
+# IDE / ОС
+.vscode/
+.idea/
+*.swp
+
+# DSH / сессионные вспомогательные каталоги
+.freebuff/

@@ -1,0 +1,9 @@
+{
+  "name": "web-ferma-reports-service",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Микросервис отчётности ИС «Заречное» (Неделя 7)",
+  "main": "index.js",
+  "scripts": { "start": "node index.js" },
+  "dependencies": { "pg": "^8.12.0" }
+}

@@ -1,0 +1,2862 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "ИС «Заречное» — REST API",
+    "version": "1.2.0",
+    "description": "Веб-приложение для комплексного учёта фермерского хозяйства (Вариант 11).\n\n**Авторизация:** Bearer-токен (POST /auth/login). Права роли проверяются на сервере по матрице `role_permission`; запрещённые вызовы возвращают 403 и фиксируются в аудите (`action=DENY`).\n\n**Валидация:** все проверки (бизнес-правила ТЗ) выполняются на стороне сервера — в HTTP-слое (src/validation.js) и в хранимых процедурах PostgreSQL.\n\n**Справочники** (Неделя 5) делят единую сигнатуру CRUD: `GET /{path}` (пагинация/поиск/сортировка), `GET /{path}/{id}`, `POST /{path}`, `PATCH /{path}/{id}`, `DELETE /{path}/{id}`. Пример эталона — `/species`.\n\n**Неделя 6:** `/admin/*` (бизнес-админка), `/tech/*` (технадминка), усиленный аудит технических ролей (заголовок `X-Override-Reason`).\n\n**Неделя 7:** адаптивный UI на `/app`, микросервис отчётности `:4000`.\n\n**Неделя 8:** 5 отчётов + дашборд с экспортом CSV."
+  },
+  "servers": [
+    {
+      "url": "/api/v1",
+      "description": "Текущий сервер"
+    }
+  ],
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "tags": [
+    {
+      "name": "auth",
+      "description": "Аутентификация и сессии"
+    },
+    {
+      "name": "animals",
+      "description": "Реестр животных (эталонный CRUD Недели 4)"
+    },
+    {
+      "name": "catalogs",
+      "description": "Справочники (CRUD): species, breeds, positions, employees, diagnoses, drugs, uoms, movement-types, write-off-reasons, disposal-reasons, task-types, suppliers, warehouses, product-types"
+    },
+    {
+      "name": "stock",
+      "description": "Склад: партии, остатки, движения, заявки на закупку"
+    },
+    {
+      "name": "tasks",
+      "description": "Задачи/наряды и их выполнение"
+    },
+    {
+      "name": "pastures",
+      "description": "Пастбищные участки и назначение выпаса"
+    },
+    {
+      "name": "system",
+      "description": "Служебные"
+    },
+    {
+      "name": "admin",
+      "description": "Бизнес-админка: пользователи, роли, права, настройки, журналы"
+    },
+    {
+      "name": "tech",
+      "description": "Технадминка: бэкапы, восстановления, техлог, метрики, обслуживание"
+    },
+    {
+      "name": "reports",
+      "description": "Статистика и отчётность (5 отчётов + дашборд + агрегация)"
+    }
+  ],
+  "paths": {
+    "/health": {
+      "get": {
+        "tags": [
+          "system"
+        ],
+        "security": [],
+        "summary": "Проверка доступности сервера и БД",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "503": {
+            "description": "База данных недоступна"
+          }
+        }
+      }
+    },
+    "/auth/login": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "security": [],
+        "summary": "Вход в систему",
+        "description": "bcrypt-сравнение пароля; неудачные попытки учитываются (5 → блокировка на 15 мин, фиксируется в аудите).",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Успешный вход",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "description": "Неверный логин или пароль"
+          },
+          "423": {
+            "description": "Учётная запись временно заблокирована"
+          }
+        }
+      }
+    },
+    "/auth/me": {
+      "get": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Текущий пользователь и его права",
+        "responses": {
+          "200": {
+            "description": "Профиль + массив прав"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/auth/logout": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Выход (отзыв текущей сессии)",
+        "responses": {
+          "200": {
+            "description": "Сессия отозвана"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/animals": {
+      "get": {
+        "tags": [
+          "animals"
+        ],
+        "summary": "Список животных (пагинация/фильтры/сортировка)",
+        "description": "Требуется право `animal:READ`.",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 50,
+              "maximum": 200
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 0
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "description": "Поиск по инвентарному номеру/породе/группе",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/AnimalStatus"
+            }
+          },
+          {
+            "name": "group_id",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "description": "inventory_number|birth_date|sex|status|arrival_date|created_at; префикс «-» — DESC",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "include_deleted",
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Страница списка",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnimalList"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "animals"
+        ],
+        "summary": "Создать карточку животного",
+        "description": "Требуется право `animal:WRITE`. Новое животное всегда получает статус ЗДОРОВ; дальнейшие переходы — только через POST /animals/{id}/status.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnimalCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Создано",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Animal"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "409": {
+            "description": "Животное с таким инвентарным номером уже существует"
+          }
+        }
+      }
+    },
+    "/animals/{id}": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "integer"
+          }
+        }
+      ],
+      "get": {
+        "tags": [
+          "animals"
+        ],
+        "summary": "Карточка животного",
+        "responses": {
+          "200": {
+            "description": "ОК"
+          },
+          "404": {
+            "description": "Не найдено"
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "animals"
+        ],
+        "summary": "Изменить реквизиты (inventory_number, breed_id, group_id)",
+        "description": "Статус и is_deleted через PATCH недоступны — сервер отвечает 400. Требуется право `animal:WRITE`. Изменение пишется в аудит (до/после).",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnimalPatch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Обновлено"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "404": {
+            "description": "Не найдено"
+          },
+          "409": {
+            "description": "Конфликт уникальности"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "animals"
+        ],
+        "summary": "Мягкое удаление (is_deleted = true)",
+        "description": "Требуется право `animal:DELETE`.",
+        "responses": {
+          "200": {
+            "description": "Удалено (мягко)"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "description": "Не найдено"
+          }
+        }
+      }
+    },
+    "/animals/{id}/status": {
+      "post": {
+        "tags": [
+          "animals"
+        ],
+        "summary": "Регламентированный перевод статуса животного",
+        "description": "Вызывает хранимую процедуру `sp_change_animal_status`: диагноз/причина обязательны; для «НА_ЛЕЧЕНИИ» — препарат списывается со склада атомарно и фиксируется withdrawal period; выбраковка/падёж требуют причины и подтверждения. Всё фиксируется в аудите.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StatusChangeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Статус изменён"
+          },
+          "400": {
+            "description": "Нарушение регламента (бизнес-правило)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "description": "Не найдено"
+          }
+        }
+      }
+    },
+    "/species": {
+      "get": {
+        "tags": [
+          "catalogs"
+        ],
+        "summary": "Справочник «виды» — список (эталон сигнатуры справочников)",
+        "description": "Все справочники (breeds, positions, employees, diagnoses, drugs, uoms, movement-types, write-off-reasons, disposal-reasons, task-types, suppliers, warehouses, product-types) имеют те же методы и формат ответа.",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 50,
+              "maximum": 200
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 0
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Список"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "catalogs"
+        ],
+        "summary": "Создать вид",
+        "responses": {
+          "201": {
+            "description": "Создано"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "409": {
+            "description": "Дубликат по уникальному реквизиту"
+          }
+        }
+      }
+    },
+    "/species/{id}": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "integer"
+          }
+        }
+      ],
+      "get": {
+        "tags": [
+          "catalogs"
+        ],
+        "summary": "Карточка справочника",
+        "responses": {
+          "200": {
+            "description": "ОК"
+          },
+          "404": {
+            "description": "Не найдено"
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "catalogs"
+        ],
+        "summary": "Изменить запись справочника",
+        "responses": {
+          "200": {
+            "description": "Обновлено"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "404": {
+            "description": "Не найдено"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "catalogs"
+        ],
+        "summary": "Удалить запись справочника",
+        "responses": {
+          "200": {
+            "description": "Удалено"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "404": {
+            "description": "Не найдено"
+          }
+        }
+      }
+    },
+    "/stock/batches": {
+      "get": {
+        "tags": [
+          "stock"
+        ],
+        "summary": "Партии склада с остатками",
+        "description": "Требуется право `stock:READ`. Фильтры: q, nomenclature_id, warehouse_id.",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 50
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 0
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "nomenclature_id",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "warehouse_id",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Список партий"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/stock/balances": {
+      "get": {
+        "tags": [
+          "stock"
+        ],
+        "summary": "Остатки по партиям",
+        "description": "Требуется право `stock:READ`.",
+        "responses": {
+          "200": {
+            "description": "Список остатков"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/stock/movements": {
+      "post": {
+        "tags": [
+          "stock"
+        ],
+        "summary": "Движение склада (приход/расход/списание/возврат)",
+        "description": "Атомарная операция в транзакции: при недостатке остатка для расхода/списания сервер отклоняет запрос (400) и откатывает транзакцию. Списание (WRITE_OFF) требует право `stock:DELETE` и причину `write_off_reason_id`; прочие типы — `stock:WRITE`.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StockMovementRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Движение проведено, остаток обновлён"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/stock/purchase-requests": {
+      "get": {
+        "tags": [
+          "stock"
+        ],
+        "summary": "Заявки на закупку",
+        "description": "Требуется право `purchase:READ`. Фильтры: status, nomenclature_id, q.",
+        "responses": {
+          "200": {
+            "description": "Список заявок"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/tasks": {
+      "get": {
+        "tags": [
+          "tasks"
+        ],
+        "summary": "Реестр задач",
+        "description": "Требуется право `task:READ`. Фильтры: status, assigned_to, q.",
+        "responses": {
+          "200": {
+            "description": "Список задач"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "tasks"
+        ],
+        "summary": "Создать разовую задачу",
+        "description": "Требуется право `task:WRITE`. Для кормовой задачи (task_type с requires_writeoff) обязательны `group_ids` и активный рацион у каждой группы (серверная проверка ТЗ п.4).",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TaskCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Создано"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/tasks/{id}": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "integer"
+          }
+        }
+      ],
+      "get": {
+        "tags": [
+          "tasks"
+        ],
+        "summary": "Карточка задачи (+ группы и исполнения)",
+        "responses": {
+          "200": {
+            "description": "ОК"
+          },
+          "404": {
+            "description": "Не найдено"
+          }
+        }
+      }
+    },
+    "/tasks/{id}/execute": {
+      "post": {
+        "tags": [
+          "tasks"
+        ],
+        "summary": "Выполнить задачу (sp_execute_task)",
+        "description": "Факт по группе + FIFO-списание корма по рациону в одной транзакции; при нехватке остатка — откат. Требуется право `task:WRITE` и учётная запись сотрудника.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TaskExecute"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Выполнено"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "description": "Не найдено"
+          }
+        }
+      }
+    },
+    "/pasture-plots": {
+      "get": {
+        "tags": [
+          "pastures"
+        ],
+        "summary": "Участки/загоны (+ текущая загрузка головами)",
+        "description": "Требуется право `pasture:READ`. area_ha считается автоматически по контуру полигона.",
+        "responses": {
+          "200": {
+            "description": "Список участков"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "pastures"
+        ],
+        "summary": "Создать участок (WKT-полигон, площадь — триггером)",
+        "description": "Требуется право `pasture:WRITE`.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlotCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Создано, area_ha рассчитана"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/pasture-plots/{id}": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "integer"
+          }
+        }
+      ],
+      "get": {
+        "tags": [
+          "pastures"
+        ],
+        "summary": "Карточка участка (+ WKT контура)",
+        "responses": {
+          "200": {
+            "description": "ОК"
+          },
+          "404": {
+            "description": "Не найдено"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "pastures"
+        ],
+        "summary": "Мягкое удаление участка",
+        "responses": {
+          "200": {
+            "description": "Удалено"
+          },
+          "404": {
+            "description": "Не найдено"
+          }
+        }
+      }
+    },
+    "/grazing/move": {
+      "post": {
+        "tags": [
+          "pastures"
+        ],
+        "summary": "Перевести группу на участок (sp_move_group_to_plot)",
+        "description": "Проверка периода отдыха участка и нормы нагрузки голов/га; закрытие предыдущего активного выпаса — в одной транзакции с откатом при нарушении. Требуется право `pasture:WRITE`.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GrazingMove"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Выпас назначен"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/admin/roles": {
+      "get": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Список ролей с числом прав и пользователей",
+        "responses": {
+          "200": {
+            "description": "ОК"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/admin/roles/{id}": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "integer"
+          }
+        }
+      ],
+      "get": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Роль и её права",
+        "responses": {
+          "200": {
+            "description": "ОК"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/admin/permissions": {
+      "get": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Каталог прав (42)",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 50
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "ОК"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/admin/users": {
+      "get": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Реестр учётных записей (без хэшей паролей)",
+        "description": "Фильтры: q, role_id, include_deleted; сортировка и пагинация.",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 50
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 0
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "role_id",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "ОК"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Создать пользователя (bcrypt)",
+        "description": "Для технических ролей обязателен X-Override-Reason.",
+        "parameters": [
+          {
+            "name": "X-Override-Reason",
+            "in": "header",
+            "required": false,
+            "description": "ОБЯЗАТЕЛЕН для TECHNICAL-ролей (SUPERUSER, DBA): причина действия, ≤500 символов",
+            "schema": {
+              "type": "string",
+              "maxLength": 500
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Создано"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/admin/users/{id}": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "integer"
+          }
+        }
+      ],
+      "get": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Карточка пользователя",
+        "responses": {
+          "200": {
+            "description": "ОК"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Изменить реквизиты (роль, активность, сотрудник)",
+        "parameters": [
+          {
+            "name": "X-Override-Reason",
+            "in": "header",
+            "required": false,
+            "description": "ОБЯЗАТЕЛЕН для TECHNICAL-ролей (SUPERUSER, DBA): причина действия, ≤500 символов",
+            "schema": {
+              "type": "string",
+              "maxLength": 500
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserPatch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "ОК"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Мягкое удаление + отзыв всех сессий в одной транзакции",
+        "parameters": [
+          {
+            "name": "X-Override-Reason",
+            "in": "header",
+            "required": false,
+            "description": "ОБЯЗАТЕЛЕН для TECHNICAL-ролей (SUPERUSER, DBA): причина действия, ≤500 символов",
+            "schema": {
+              "type": "string",
+              "maxLength": 500
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "ОК"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/admin/users/{id}/reset-password": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "integer"
+          }
+        }
+      ],
+      "post": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Смена пароля (bcrypt, must_change_pw)",
+        "parameters": [
+          {
+            "name": "X-Override-Reason",
+            "in": "header",
+            "required": false,
+            "description": "ОБЯЗАТЕЛЕН для TECHNICAL-ролей (SUPERUSER, DBA): причина действия, ≤500 символов",
+            "schema": {
+              "type": "string",
+              "maxLength": 500
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasswordReset"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "ОК"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/admin/users/{id}/unlock": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "integer"
+          }
+        }
+      ],
+      "post": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Снять временную блокировку",
+        "parameters": [
+          {
+            "name": "X-Override-Reason",
+            "in": "header",
+            "required": false,
+            "description": "ОБЯЗАТЕЛЕН для TECHNICAL-ролей (SUPERUSER, DBA): причина действия, ≤500 символов",
+            "schema": {
+              "type": "string",
+              "maxLength": 500
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "ОК"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/admin/settings": {
+      "get": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Настройки хозяйства (farm_settings)",
+        "responses": {
+          "200": {
+            "description": "ОК"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/admin/settings/{key}": {
+      "parameters": [
+        {
+          "name": "key",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "patch": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Изменить настройку (тип NUM/BOOL/DATE/TEXT контролируется БД)",
+        "parameters": [
+          {
+            "name": "X-Override-Reason",
+            "in": "header",
+            "required": false,
+            "description": "ОБЯЗАТЕЛЕН для TECHNICAL-ролей (SUPERUSER, DBA): причина действия, ≤500 символов",
+            "schema": {
+              "type": "string",
+              "maxLength": 500
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SettingPatch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "ОК"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/admin/audit-log": {
+      "get": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Журнал бизнес-аудита",
+        "description": "Фильтры: user_id, entity_name, action, q, date_from, date_to, is_elevated.",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 50
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 0
+            }
+          },
+          {
+            "name": "action",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "is_elevated",
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "date_from",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "ОК"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/admin/audit-log/export": {
+      "get": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Выгрузка аудита в CSV (BOM, разделитель ;)",
+        "description": "Требует export:EXEC; факт выгрузки пишется в аудит.",
+        "responses": {
+          "200": {
+            "description": "text/csv"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/admin/sessions": {
+      "get": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Активные сессии (без token_hash)",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 50
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 0
+            }
+          },
+          {
+            "name": "user_id",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "ОК"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/admin/notifications": {
+      "get": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Уведомления текущего пользователя",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 50
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 0
+            }
+          },
+          {
+            "name": "unread_only",
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "ОК"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/admin/notifications/{id}/read": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "integer"
+          }
+        }
+      ],
+      "patch": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Пометить уведомление прочитанным (только своё)",
+        "responses": {
+          "200": {
+            "description": "ОК"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/tech/backups": {
+      "get": {
+        "tags": [
+          "tech"
+        ],
+        "summary": "Журнал резервных копий",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 50
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 0
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "ОК"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "tech"
+        ],
+        "summary": "Создать резервную копию (pg_dump -Fc, SHA-256)",
+        "description": "Требует backup:EXEC + X-Override-Reason; пишется в tech_log.",
+        "parameters": [
+          {
+            "name": "X-Override-Reason",
+            "in": "header",
+            "required": false,
+            "description": "ОБЯЗАТЕЛЕН для TECHNICAL-ролей (SUPERUSER, DBA): причина действия, ≤500 символов",
+            "schema": {
+              "type": "string",
+              "maxLength": 500
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BackupCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Создано"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/tech/backups/{id}": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "integer"
+          }
+        }
+      ],
+      "get": {
+        "tags": [
+          "tech"
+        ],
+        "summary": "Карточка копии + связанные восстановления",
+        "responses": {
+          "200": {
+            "description": "ОК"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/tech/restores": {
+      "get": {
+        "tags": [
+          "tech"
+        ],
+        "summary": "Журнал восстановлений",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 50
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "ОК"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "tech"
+        ],
+        "summary": "Восстановление из копии (pg_restore --clean)",
+        "description": "Разрушающая операция: обязательна причина, проверка checksum, tech_log.",
+        "parameters": [
+          {
+            "name": "X-Override-Reason",
+            "in": "header",
+            "required": false,
+            "description": "ОБЯЗАТЕЛЕН для TECHNICAL-ролей (SUPERUSER, DBA): причина действия, ≤500 символов",
+            "schema": {
+              "type": "string",
+              "maxLength": 500
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RestoreCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Создано"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/tech/log": {
+      "get": {
+        "tags": [
+          "tech"
+        ],
+        "summary": "Технический лог (отдельно от бизнес-аудита)",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 50
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 0
+            }
+          },
+          {
+            "name": "action_type",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "ОК"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/tech/metrics": {
+      "get": {
+        "tags": [
+          "tech"
+        ],
+        "summary": "Метрики БД: соединения, размер, счётчики",
+        "responses": {
+          "200": {
+            "description": "ОК"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/tech/maintenance": {
+      "post": {
+        "tags": [
+          "tech"
+        ],
+        "summary": "VACUUM / ANALYZE / REINDEX",
+        "description": "Вне транзакции; результат пишется в tech_log.",
+        "parameters": [
+          {
+            "name": "X-Override-Reason",
+            "in": "header",
+            "required": false,
+            "description": "ОБЯЗАТЕЛЕН для TECHNICAL-ролей (SUPERUSER, DBA): причина действия, ≤500 символов",
+            "schema": {
+              "type": "string",
+              "maxLength": 500
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Maintenance"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "ОК"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/reports/cost-fcr": {
+      "get": {
+        "tags": [
+          "reports"
+        ],
+        "summary": "Себестоимость и конверсия корма (FCR) по группам и месяцам",
+        "description": "Доступ: report:READ; CSV-экспорт дополнительно требует export:EXEC.",
+        "parameters": [
+          {
+            "name": "format",
+            "in": "query",
+            "description": "json (по умолчанию) | csv",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "json",
+                "csv"
+              ]
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "ОК"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/reports/herd-health": {
+      "get": {
+        "tags": [
+          "reports"
+        ],
+        "summary": "Здоровье поголовья: доля больных, выбраковка, просрочки вакцинаций",
+        "description": "Доступ: report:READ; CSV-экспорт дополнительно требует export:EXEC.",
+        "parameters": [
+          {
+            "name": "format",
+            "in": "query",
+            "description": "json (по умолчанию) | csv",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "json",
+                "csv"
+              ]
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "ОК"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/reports/pasture-load": {
+      "get": {
+        "tags": [
+          "reports"
+        ],
+        "summary": "Нагрузка на пастбища: голов/га, период отдыха, риск перевыпаса",
+        "description": "Доступ: report:READ; CSV-экспорт дополнительно требует export:EXEC.",
+        "parameters": [
+          {
+            "name": "format",
+            "in": "query",
+            "description": "json (по умолчанию) | csv",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "json",
+                "csv"
+              ]
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "ОК"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/reports/tasks-in-work": {
+      "get": {
+        "tags": [
+          "reports"
+        ],
+        "summary": "Задачи в работе: просрочки, загрузка бригады",
+        "description": "Доступ: report:READ; CSV-экспорт дополнительно требует export:EXEC.",
+        "parameters": [
+          {
+            "name": "format",
+            "in": "query",
+            "description": "json (по умолчанию) | csv",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "json",
+                "csv"
+              ]
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "ОК"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/reports/stock-turnover": {
+      "get": {
+        "tags": [
+          "reports"
+        ],
+        "summary": "Остатки склада и обороты: дефицит, неликвид",
+        "description": "Доступ: report:READ; CSV-экспорт дополнительно требует export:EXEC.",
+        "parameters": [
+          {
+            "name": "format",
+            "in": "query",
+            "description": "json (по умолчанию) | csv",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "json",
+                "csv"
+              ]
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "ОК"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/reports/dashboard": {
+      "get": {
+        "tags": [
+          "reports"
+        ],
+        "summary": "Сводный дашборд (KPI + динамика склада за 12 месяцев)",
+        "description": "Доступ: report:READ; CSV-экспорт дополнительно требует export:EXEC.",
+        "parameters": [
+          {
+            "name": "format",
+            "in": "query",
+            "description": "json (по умолчанию) | csv",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "json",
+                "csv"
+              ]
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "ОК"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/reports/aggregate": {
+      "get": {
+        "tags": [
+          "reports"
+        ],
+        "summary": "Помесячная агрегация в микросервисе отчётности (reports-service :4000)",
+        "description": "Доступ: report:READ; CSV-экспорт дополнительно требует export:EXEC.",
+        "parameters": [
+          {
+            "name": "format",
+            "in": "query",
+            "description": "json (по умолчанию) | csv",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "json",
+                "csv"
+              ]
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "ОК"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Токен из POST /auth/login"
+      }
+    },
+    "responses": {
+      "BadRequest": {
+        "description": "Ошибка валидации или бизнес-правило",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "Unauthorized": {
+        "description": "Нет токена / сессия истекла"
+      },
+      "Forbidden": {
+        "description": "Недостаточно прав (запись в аудит action=DENY)"
+      }
+    },
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "business_rule",
+              "conflict",
+              "forbidden",
+              "invalid_input",
+              "foreign_key",
+              "check_violation",
+              "server",
+              "precondition_required"
+            ]
+          },
+          "detail": {
+            "type": "string"
+          }
+        }
+      },
+      "AnimalStatus": {
+        "type": "string",
+        "enum": [
+          "ЗДОРОВ",
+          "НА_ОСМОТРЕ",
+          "НА_КАРАНТИНЕ",
+          "НА_ЛЕЧЕНИИ",
+          "ВЫБРАКОВАНО",
+          "ПАДЁЖ"
+        ]
+      },
+      "LoginRequest": {
+        "type": "object",
+        "required": [
+          "login",
+          "password"
+        ],
+        "properties": {
+          "login": {
+            "type": "string",
+            "example": "vet"
+          },
+          "password": {
+            "type": "string",
+            "example": "demo1234"
+          }
+        }
+      },
+      "LoginResponse": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "user": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "integer"
+              },
+              "login": {
+                "type": "string"
+              },
+              "full_name": {
+                "type": "string"
+              },
+              "employee_id": {
+                "type": "integer",
+                "nullable": true
+              },
+              "role": {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "BUSINESS",
+                      "TECHNICAL"
+                    ]
+                  }
+                }
+              },
+              "permissions": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "Animal": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "inventory_number": {
+            "type": "string"
+          },
+          "birth_date": {
+            "type": "string",
+            "format": "date"
+          },
+          "sex": {
+            "type": "string",
+            "enum": [
+              "M",
+              "F"
+            ]
+          },
+          "status": {
+            "$ref": "#/components/schemas/AnimalStatus"
+          },
+          "arrival_date": {
+            "type": "string",
+            "format": "date"
+          },
+          "group_id": {
+            "type": "integer",
+            "nullable": true
+          },
+          "breed_id": {
+            "type": "integer"
+          },
+          "breed": {
+            "type": "string"
+          },
+          "group_name": {
+            "type": "string",
+            "nullable": true
+          },
+          "is_deleted": {
+            "type": "boolean"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "AnimalCreate": {
+        "type": "object",
+        "required": [
+          "inventory_number",
+          "breed_id",
+          "birth_date",
+          "sex"
+        ],
+        "properties": {
+          "inventory_number": {
+            "type": "string",
+            "maxLength": 20,
+            "example": "INV-0101"
+          },
+          "breed_id": {
+            "type": "integer",
+            "example": 1
+          },
+          "group_id": {
+            "type": "integer",
+            "nullable": true,
+            "example": 36
+          },
+          "birth_date": {
+            "type": "string",
+            "format": "date",
+            "example": "2025-04-12"
+          },
+          "sex": {
+            "type": "string",
+            "enum": [
+              "M",
+              "F"
+            ]
+          },
+          "arrival_date": {
+            "type": "string",
+            "format": "date"
+          }
+        }
+      },
+      "AnimalPatch": {
+        "type": "object",
+        "properties": {
+          "inventory_number": {
+            "type": "string"
+          },
+          "breed_id": {
+            "type": "integer"
+          },
+          "group_id": {
+            "type": "integer",
+            "nullable": true
+          }
+        }
+      },
+      "AnimalList": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Animal"
+            }
+          },
+          "total": {
+            "type": "integer"
+          },
+          "limit": {
+            "type": "integer"
+          },
+          "offset": {
+            "type": "integer"
+          }
+        }
+      },
+      "StatusChangeRequest": {
+        "type": "object",
+        "required": [
+          "status",
+          "reason"
+        ],
+        "properties": {
+          "status": {
+            "$ref": "#/components/schemas/AnimalStatus"
+          },
+          "reason": {
+            "type": "string",
+            "description": "Причина/диагноз — обязательна регламентом"
+          },
+          "diagnosis_id": {
+            "type": "integer",
+            "description": "Обязателен для НА_ЛЕЧЕНИИ и НА_КАРАНТИНЕ"
+          },
+          "drug_nomenclature_id": {
+            "type": "integer",
+            "description": "Обязателен для НА_ЛЕЧЕНИИ; препарат списывается со склада"
+          },
+          "dosage": {
+            "type": "number",
+            "description": "Дозировка (> 0)"
+          },
+          "disposal_reason_id": {
+            "type": "integer",
+            "description": "Обязателен для ВЫБРАКОВАНО/ПАДЁЖ"
+          }
+        }
+      },
+      "StockMovementRequest": {
+        "type": "object",
+        "required": [
+          "movement_type",
+          "batch_id",
+          "qty"
+        ],
+        "properties": {
+          "movement_type": {
+            "type": "string",
+            "enum": [
+              "RECEIPT",
+              "ISSUE",
+              "WRITE_OFF",
+              "RETURN"
+            ]
+          },
+          "batch_id": {
+            "type": "integer"
+          },
+          "qty": {
+            "type": "number",
+            "description": "Положительное количество"
+          },
+          "write_off_reason_id": {
+            "type": "integer",
+            "description": "Обязателен для WRITE_OFF"
+          },
+          "comment": {
+            "type": "string",
+            "maxLength": 300
+          }
+        }
+      },
+      "TaskCreate": {
+        "type": "object",
+        "required": [
+          "task_type_id",
+          "title",
+          "assigned_to"
+        ],
+        "properties": {
+          "task_type_id": {
+            "type": "integer"
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "plot_id": {
+            "type": "integer",
+            "nullable": true
+          },
+          "assigned_to": {
+            "type": "integer",
+            "description": "employee.id"
+          },
+          "planned_date": {
+            "type": "string",
+            "format": "date"
+          },
+          "due_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "priority": {
+            "type": "string",
+            "enum": [
+              "LOW",
+              "NORMAL",
+              "HIGH"
+            ]
+          },
+          "group_ids": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            }
+          }
+        }
+      },
+      "TaskExecute": {
+        "type": "object",
+        "required": [
+          "group_id"
+        ],
+        "properties": {
+          "group_id": {
+            "type": "integer"
+          },
+          "actual_amount": {
+            "type": "number",
+            "description": "Фактический расход корма (для кормовых задач)"
+          },
+          "notes": {
+            "type": "string"
+          }
+        }
+      },
+      "PlotCreate": {
+        "type": "object",
+        "required": [
+          "plot_no",
+          "name",
+          "max_head_per_ha",
+          "geom_wkt"
+        ],
+        "properties": {
+          "plot_no": {
+            "type": "string",
+            "maxLength": 16
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "vegetation_type": {
+            "type": "string",
+            "enum": [
+              "культурное",
+              "естественное"
+            ]
+          },
+          "max_head_per_ha": {
+            "type": "number"
+          },
+          "rest_days_required": {
+            "type": "integer"
+          },
+          "is_active": {
+            "type": "boolean"
+          },
+          "geom_wkt": {
+            "type": "string",
+            "description": "POLYGON(...) в SRID 4326"
+          }
+        }
+      },
+      "GrazingMove": {
+        "type": "object",
+        "required": [
+          "group_id",
+          "plot_id"
+        ],
+        "properties": {
+          "group_id": {
+            "type": "integer"
+          },
+          "plot_id": {
+            "type": "integer"
+          },
+          "note": {
+            "type": "string",
+            "maxLength": 300
+          }
+        }
+      },
+      "UserCreate": {
+        "type": "object",
+        "required": [
+          "login",
+          "password",
+          "full_name",
+          "role_id"
+        ],
+        "properties": {
+          "login": {
+            "type": "string",
+            "example": "new_user"
+          },
+          "password": {
+            "type": "string",
+            "description": "≥8 символов, ≥1 заглавной, ≥1 цифры"
+          },
+          "full_name": {
+            "type": "string"
+          },
+          "role_id": {
+            "type": "integer"
+          },
+          "employee_id": {
+            "type": "integer",
+            "nullable": true
+          },
+          "must_change_pw": {
+            "type": "boolean"
+          }
+        }
+      },
+      "UserPatch": {
+        "type": "object",
+        "properties": {
+          "full_name": {
+            "type": "string"
+          },
+          "role_id": {
+            "type": "integer"
+          },
+          "employee_id": {
+            "type": "integer",
+            "nullable": true
+          },
+          "is_active": {
+            "type": "boolean"
+          },
+          "must_change_pw": {
+            "type": "boolean"
+          }
+        }
+      },
+      "PasswordReset": {
+        "type": "object",
+        "required": [
+          "password"
+        ],
+        "properties": {
+          "password": {
+            "type": "string"
+          }
+        }
+      },
+      "SettingPatch": {
+        "type": "object",
+        "properties": {
+          "value": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          }
+        }
+      },
+      "BackupCreate": {
+        "type": "object",
+        "required": [
+          "backup_type"
+        ],
+        "properties": {
+          "backup_type": {
+            "type": "string",
+            "enum": [
+              "FULL",
+              "INCREMENTAL"
+            ]
+          },
+          "retention_days": {
+            "type": "integer",
+            "default": 30
+          },
+          "note": {
+            "type": "string"
+          }
+        }
+      },
+      "RestoreCreate": {
+        "type": "object",
+        "required": [
+          "backup_job_id",
+          "reason"
+        ],
+        "properties": {
+          "backup_job_id": {
+            "type": "integer"
+          },
+          "reason": {
+            "type": "string",
+            "description": "Причина инцидента"
+          }
+        }
+      },
+      "Maintenance": {
+        "type": "object",
+        "required": [
+          "operation"
+        ],
+        "properties": {
+          "operation": {
+            "type": "string",
+            "enum": [
+              "VACUUM",
+              "ANALYZE",
+              "REINDEX"
+            ]
+          },
+          "note": {
+            "type": "string"
+          }
+        }
+      },
+      "ReportRow": {
+        "type": "object",
+        "description": "Строка отчёта (набор полей зависит от отчёта)",
+        "additionalProperties": true
+      }
+    }
+  }
+}
