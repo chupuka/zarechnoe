@@ -1,24 +1,6 @@
 services:
-  # PostgreSQL 16 + PostGIS — единая БД для ядра и микросервиса
-  db:
-    image: postgis/postgis:16-3.4
-    container_name: farm_pg
-    environment:
-      POSTGRES_USER: farm
-      POSTGRES_PASSWORD: farm
-      POSTGRES_DB: farm
-    ports:
-      - "5433:5432"
-    volumes:
-      - farm_pgdata:/var/lib/postgresql/data
-      - ./db:/docker-entrypoint-initdb.d:ro
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U farm -d farm"]
-      interval: 5s
-      timeout: 3s
-      retries: 20
-
-  # Ядро: REST API + раздача адаптивного веб-интерфейса
+  # Ядро: REST API + раздача адаптивного веб-интерфейса.
+  # БД — внешняя (Supabase): локальный контейнер PostgreSQL не поднимаем.
   api:
     build:
       context: .
@@ -26,24 +8,24 @@ services:
     container_name: farm_api
     environment:
       PORT: 3000
-      PGHOST: db
-      PGPORT: 5432
-      PGUSER: farm
-      PGPASSWORD: farm
-      PGDATABASE: farm
+      PGHOST: ${PGHOST:-aws-0-eu-central-1.pooler.supabase.com}
+      PGPORT: ${PGPORT:-5432}
+      PGUSER: ${PGUSER:-postgres}
+      PGPASSWORD: ${PGPASSWORD:?задай PGPASSWORD в .env}
+      PGDATABASE: ${PGDATABASE:-postgres}
+      PGSSLMODE: ${PGSSLMODE:-require}
       REPORTS_HOST: reports
       REPORTS_PORT: 4000
       # Ключ шифрования ПДн сотрудников (ТЗ п.7). В БД не хранится — только здесь.
-      # Для стенда используется демо-ключ; в эксплуатации задаётся через .env/секрет.
-      PII_KEY: ${PII_KEY:-zarechnoe-pii-key-2026-demo-32chars-min}
+      PII_KEY: ${PII_KEY:?задай PII_KEY в .env}
       # Планировщик резервного копирования (проверка расписания раз в минуту)
       BACKUP_SCHEDULER: ${BACKUP_SCHEDULER:-on}
       BACKUP_TICK_MS: ${BACKUP_TICK_MS:-60000}
+      PYTHON_BIN: python3
+      FARM_PSQL_MODE: local
+      FARM_BACKUP_DIR: /app/backups
     ports:
-      - "3000:3000"
-    depends_on:
-      db:
-        condition: service_healthy
+      - "127.0.0.1:3000:3000"
     volumes:
       - ./backups:/app/backups
 
@@ -54,16 +36,11 @@ services:
     container_name: farm_reports
     environment:
       REPORTS_PORT: 4000
-      PGHOST: db
-      PGPORT: 5432
-      PGUSER: farm
-      PGPASSWORD: farm
-      PGDATABASE: farm
+      PGHOST: ${PGHOST:-aws-0-eu-central-1.pooler.supabase.com}
+      PGPORT: ${PGPORT:-5432}
+      PGUSER: ${PGUSER:-postgres}
+      PGPASSWORD: ${PGPASSWORD:?задай PGPASSWORD в .env}
+      PGDATABASE: ${PGDATABASE:-postgres}
+      PGSSLMODE: ${PGSSLMODE:-require}
     ports:
-      - "4000:4000"
-    depends_on:
-      db:
-        condition: service_healthy
-
-volumes:
-  farm_pgdata:
+      - "127.0.0.1:4000:4000"

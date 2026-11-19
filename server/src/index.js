@@ -26,6 +26,21 @@ const app = express();
 app.set('trust proxy', true);
 app.use(express.json({ limit: '1mb' }));
 
+// CORS: GitHub Pages (продакшен) и локальная разработка.
+// Авторизация Bearer, cookie не используются — credentials не нужны.
+const CORS_ORIGINS = new Set(['https://chupuka.github.io', 'http://localhost:3000']);
+app.use((req, res, next) => {
+    const origin = req.headers.origin;
+    if (origin && CORS_ORIGINS.has(origin)) {
+        res.setHeader('Access-Control-Allow-Origin', origin);
+        res.setHeader('Vary', 'Origin');
+        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Override-Reason');
+        if (req.method === 'OPTIONS') return res.sendStatus(204);
+    }
+    next();
+});
+
 // Access-log (метод, путь, статус, длительность)
 app.use((req, res, next) => {
     const t = Date.now();

@@ -13,7 +13,7 @@
 /* --------------------------------------------------------------------------
  * 1. Константы
  * -------------------------------------------------------------------------- */
-const API_BASE = '/api/v1';
+const API_BASE = (window.ZARECHNOE_API_BASE || '/api/v1').replace(/\/$/, '');
 const TOKEN_KEY = 'zarechnoe.token';
 const THEME_KEY = 'zarechnoe.theme';
 const LANG_KEY = 'zarechnoe.lang';

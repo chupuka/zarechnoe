@@ -3,8 +3,8 @@ WORKDIR /app
 
 # pg_dump/pg_restore нужны для резервного копирования (routes/tech.js),
 # python3 — для scripts/backup_restore.py. Без них копии падают с 503.
-# Клиент PostgreSQL должен быть той же мажорной версии, что и сервер (16).
-RUN apk add --no-cache postgresql16-client python3
+# Клиент PostgreSQL должен быть той же мажорной версии, что и сервер Supabase (17).
+RUN apk add --no-cache postgresql17-client python3
 
 COPY server/package.json server/package-lock.json* ./
 RUN npm install --omit=dev

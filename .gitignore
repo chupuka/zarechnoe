@@ -13,6 +13,7 @@ backups/
 # Переменные окружения и секреты
 .env
 .env.*
+!.env.example
 *.pem
 *.key
 
