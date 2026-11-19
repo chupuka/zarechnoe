@@ -2,8 +2,8 @@
   "openapi": "3.0.3",
   "info": {
     "title": "ИС «Заречное» — REST API",
-    "version": "1.2.0",
-    "description": "Веб-приложение для комплексного учёта фермерского хозяйства (Вариант 11).\n\n**Авторизация:** Bearer-токен (POST /auth/login). Права роли проверяются на сервере по матрице `role_permission`; запрещённые вызовы возвращают 403 и фиксируются в аудите (`action=DENY`).\n\n**Валидация:** все проверки (бизнес-правила ТЗ) выполняются на стороне сервера — в HTTP-слое (src/validation.js) и в хранимых процедурах PostgreSQL.\n\n**Справочники** (Неделя 5) делят единую сигнатуру CRUD: `GET /{path}` (пагинация/поиск/сортировка), `GET /{path}/{id}`, `POST /{path}`, `PATCH /{path}/{id}`, `DELETE /{path}/{id}`. Пример эталона — `/species`.\n\n**Неделя 6:** `/admin/*` (бизнес-админка), `/tech/*` (технадминка), усиленный аудит технических ролей (заголовок `X-Override-Reason`).\n\n**Неделя 7:** адаптивный UI на `/app`, микросервис отчётности `:4000`.\n\n**Неделя 8:** 5 отчётов + дашборд с экспортом CSV."
+    "version": "1.4.0",
+    "description": "Веб-приложение для комплексного учёта фермерского хозяйства (Вариант 11).\n\n**Авторизация:** Bearer-токен (POST /auth/login). Права роли проверяются на сервере по матрице `role_permission`; запрещённые вызовы возвращают 403 и фиксируются в аудите (`action=DENY`).\n\n**Валидация:** все проверки (бизнес-правила ТЗ) выполняются на стороне сервера — в HTTP-слое (src/validation.js) и в хранимых процедурах PostgreSQL.\n\n**Справочники** (Неделя 5) делят единую сигнатуру CRUD: `GET /{path}` (пагинация/поиск/сортировка), `GET /{path}/{id}`, `POST /{path}`, `PATCH /{path}/{id}`, `DELETE /{path}/{id}`. Пример эталона — `/species`.\n\n**Неделя 6:** `/admin/*` (бизнес-админка), `/tech/*` (технадминка), усиленный аудит технических ролей (заголовок `X-Override-Reason`).\n\n**Неделя 7:** адаптивный UI на `/app`, микросервис отчётности `:4000`.\n\n**Неделя 8:** 5 отчётов + дашборд с экспортом CSV.\n\n**Администратор БД:** `/dba/*` — миграции схемы (реестр версий, предварительный прогон с откатом, защита от разрушительных изменений), резервное копирование/восстановление, мониторинг производительности (`pg_stat_*`). Технический лог отделён от бизнес-аудита; права `dba:*` есть только у техролей.\n\n**Доработка (вариант 11):** шифрование ПДн сотрудников в БД (`pgcrypto`, ключ только в `PII_KEY`), плашка статистики на каждом экране (`/stats/:section`), расширенная админка пользователей (блокировки, пароли, сессии, матрица прав), аудит по пользователю и категории `violations`, единая страница резервных копий с периодом и историей (`/tech/backups/overview`), метрики скорости БД с вердиктом (`/tech/metrics/perf`), закрепление сотрудников за животными и статусы `НА_ПРОДАЖЕ`/`ПРОДАН`."
   },
   "servers": [
     {
@@ -56,6 +56,22 @@
     {
       "name": "reports",
       "description": "Статистика и отчётность (5 отчётов + дашборд + агрегация)"
+    },
+    {
+      "name": "dba",
+      "description": "Администратор БД: миграции схемы, бэкапы, мониторинг (только техроли, dba:*)"
+    },
+    {
+      "name": "stats",
+      "description": "Показатели страниц по правам роли"
+    },
+    {
+      "name": "employees",
+      "description": "Сотрудники и зашифрованные персональные данные"
+    },
+    {
+      "name": "assignments",
+      "description": "Закрепление сотрудников за животными"
     }
   ],
   "paths": {
@@ -2258,6 +2274,2278 @@
         "responses": {
           "200": {
             "description": "ОК"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/dba/migrations": {
+      "get": {
+        "tags": [
+          "dba"
+        ],
+        "summary": "Состояние миграций схемы",
+        "description": "Файлы db/migrations/*.sql сопоставлены с реестром schema_migration: NEW/PENDING/APPLIED/FAILED/CHANGED (CHANGED = файл изменён после применения).",
+        "responses": {
+          "200": {
+            "description": "Успешно"
+          },
+          "401": {
+            "description": "Не авторизован"
+          },
+          "403": {
+            "description": "Нет права dba:READ / dba:EXEC"
+          }
+        }
+      }
+    },
+    "/dba/migrations/history": {
+      "get": {
+        "tags": [
+          "dba"
+        ],
+        "summary": "Реестр применённых версий",
+        "description": "Записи schema_migration: контрольная сумма, длительность, кто применил, ошибки.",
+        "responses": {
+          "200": {
+            "description": "Успешно"
+          },
+          "401": {
+            "description": "Не авторизован"
+          },
+          "403": {
+            "description": "Нет права dba:READ / dba:EXEC"
+          }
+        }
+      }
+    },
+    "/dba/migrations/preflight": {
+      "post": {
+        "tags": [
+          "dba"
+        ],
+        "summary": "Предварительный прогон (dry-run)",
+        "description": "Каждый ожидающий файл реально выполняется в транзакции и ОТКАТЫВАЕТСЯ: оператор видит результат и список объектов схемы, не меняя БД.",
+        "responses": {
+          "201": {
+            "description": "Создано"
+          },
+          "401": {
+            "description": "Не авторизован"
+          },
+          "403": {
+            "description": "Нет права dba:READ / dba:EXEC"
+          },
+          "428": {
+            "description": "Техроли нужен заголовок X-Override-Reason"
+          }
+        }
+      }
+    },
+    "/dba/migrations/apply": {
+      "post": {
+        "tags": [
+          "dba"
+        ],
+        "summary": "Применить миграции",
+        "description": "Перед применением снимается полная резервная копия. Все файлы идут в ОДНОЙ транзакции (all-or-nothing). Разрушительные файлы (DROP/изменение колонок) блокируются до явного подтверждения. Событие пишется в tech_log.",
+        "responses": {
+          "201": {
+            "description": "Создано"
+          },
+          "401": {
+            "description": "Не авторизован"
+          },
+          "403": {
+            "description": "Нет права dba:READ / dba:EXEC"
+          },
+          "428": {
+            "description": "Техроли нужен заголовок X-Override-Reason"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "version": {
+                    "type": "string",
+                    "description": "Конкретная версия (иначе все ожидающие)"
+                  },
+                  "create_backup": {
+                    "type": "boolean",
+                    "description": "false — без автокопии"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/dba/migrations/rollback": {
+      "post": {
+        "tags": [
+          "dba"
+        ],
+        "summary": "Откат схемы к резервной копии",
+        "description": "Восстановление через pg_restore; создаёт запись restore_job и пишет ROLLBACK в tech_log.",
+        "responses": {
+          "201": {
+            "description": "Создано"
+          },
+          "401": {
+            "description": "Не авторизован"
+          },
+          "403": {
+            "description": "Нет права dba:READ / dba:EXEC"
+          },
+          "428": {
+            "description": "Техроли нужен заголовок X-Override-Reason"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "backup_job_id": {
+                    "type": "integer"
+                  },
+                  "reason": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/dba/backups": {
+      "get": {
+        "tags": [
+          "dba"
+        ],
+        "summary": "Журнал резервных копий",
+        "description": "backup_job + связанные восстановления.",
+        "responses": {
+          "200": {
+            "description": "Успешно"
+          },
+          "401": {
+            "description": "Не авторизован"
+          },
+          "403": {
+            "description": "Нет права dba:READ / dba:EXEC"
+          }
+        }
+      }
+    },
+    "/dba/backups/files": {
+      "get": {
+        "tags": [
+          "dba"
+        ],
+        "summary": "Копии на диске",
+        "description": "Реальное содержимое каталога backups: размер, возраст, срок жизни по retention, SHA-256.",
+        "responses": {
+          "200": {
+            "description": "Успешно"
+          },
+          "401": {
+            "description": "Не авторизован"
+          },
+          "403": {
+            "description": "Нет права dba:READ / dba:EXEC"
+          }
+        },
+        "parameters": [
+          {
+            "name": "retention",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Срок хранения в днях (по умолчанию 30)"
+          }
+        ]
+      }
+    },
+    "/dba/backups/rotate": {
+      "post": {
+        "tags": [
+          "dba"
+        ],
+        "summary": "Ротация копий",
+        "description": "Удаляет .dump и .sha256 старше retention дней. Выполняется Node без дочерних процессов.",
+        "responses": {
+          "201": {
+            "description": "Создано"
+          },
+          "401": {
+            "description": "Не авторизован"
+          },
+          "403": {
+            "description": "Нет права dba:READ / dba:EXEC"
+          },
+          "428": {
+            "description": "Техроли нужен заголовок X-Override-Reason"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "retention_days": {
+                    "type": "integer"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/dba/monitor/health": {
+      "get": {
+        "tags": [
+          "dba"
+        ],
+        "summary": "Сводка здоровья БД",
+        "description": "pg_stat_*: соединения, кэш-хит, мёртвые строки, неиспользуемые индексы, блокировки, seq scan + интерпретация проблем (severity OK/WARNING/CRITICAL).",
+        "responses": {
+          "200": {
+            "description": "Успешно"
+          },
+          "401": {
+            "description": "Не авторизован"
+          },
+          "403": {
+            "description": "Нет права dba:READ / dba:EXEC"
+          }
+        }
+      }
+    },
+    "/dba/monitor/tables": {
+      "get": {
+        "tags": [
+          "dba"
+        ],
+        "summary": "Топ таблиц",
+        "description": "Размер, мёртвые строки, вакуум, чтения.",
+        "responses": {
+          "200": {
+            "description": "Успешно"
+          },
+          "401": {
+            "description": "Не авторизован"
+          },
+          "403": {
+            "description": "Нет права dba:READ / dba:EXEC"
+          }
+        }
+      }
+    },
+    "/dba/monitor/indexes": {
+      "get": {
+        "tags": [
+          "dba"
+        ],
+        "summary": "Индексы",
+        "description": "Неиспользуемые индексы и таблицы с полным перебором.",
+        "responses": {
+          "200": {
+            "description": "Успешно"
+          },
+          "401": {
+            "description": "Не авторизован"
+          },
+          "403": {
+            "description": "Нет права dba:READ / dba:EXEC"
+          }
+        }
+      }
+    },
+    "/dba/monitor/slow": {
+      "get": {
+        "tags": [
+          "dba"
+        ],
+        "summary": "Медленные запросы",
+        "description": "История из pg_stat_statements. Если расширение не установлено — честно возвращает available:false и только текущие запросы из pg_stat_activity.",
+        "responses": {
+          "200": {
+            "description": "Успешно"
+          },
+          "401": {
+            "description": "Не авторизован"
+          },
+          "403": {
+            "description": "Нет права dba:READ / dba:EXEC"
+          }
+        }
+      }
+    },
+    "/dba/monitor/locks": {
+      "get": {
+        "tags": [
+          "dba"
+        ],
+        "summary": "Блокировки",
+        "description": "pg_blocking_pids(): кто кого ждёт и события ожидания.",
+        "responses": {
+          "200": {
+            "description": "Успешно"
+          },
+          "401": {
+            "description": "Не авторизован"
+          },
+          "403": {
+            "description": "Нет права dba:READ / dba:EXEC"
+          }
+        }
+      }
+    },
+    "/dba/monitor/connections": {
+      "get": {
+        "tags": [
+          "dba"
+        ],
+        "summary": "Соединения",
+        "description": "По базам, по состояниям, длинные запросы.",
+        "responses": {
+          "200": {
+            "description": "Успешно"
+          },
+          "401": {
+            "description": "Не авторизован"
+          },
+          "403": {
+            "description": "Нет права dba:READ / dba:EXEC"
+          }
+        }
+      }
+    },
+    "/dba/monitor/capture": {
+      "post": {
+        "tags": [
+          "dba"
+        ],
+        "summary": "Снять снимок метрик",
+        "description": "Пишет db_metric_sample для графиков; событие в tech_log.",
+        "responses": {
+          "201": {
+            "description": "Создано"
+          },
+          "401": {
+            "description": "Не авторизован"
+          },
+          "403": {
+            "description": "Нет права dba:READ / dba:EXEC"
+          },
+          "428": {
+            "description": "Техроли нужен заголовок X-Override-Reason"
+          }
+        }
+      }
+    },
+    "/dba/monitor/history": {
+      "get": {
+        "tags": [
+          "dba"
+        ],
+        "summary": "История снимков",
+        "description": "db_metric_sample, последние N.",
+        "responses": {
+          "200": {
+            "description": "Успешно"
+          },
+          "401": {
+            "description": "Не авторизован"
+          },
+          "403": {
+            "description": "Нет права dba:READ / dba:EXEC"
+          }
+        },
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Кол-во записей (по умолчанию 100)"
+          }
+        ]
+      }
+    },
+    "/dba/monitor/refresh-stats": {
+      "post": {
+        "tags": [
+          "dba"
+        ],
+        "summary": "Обслуживание БД",
+        "description": "VACUUM / ANALYZE / REINDEX. Имя таблицы проверяется по каталогу pg_class — ввод не попадает в SQL напрямую (защита от инъекций).",
+        "responses": {
+          "201": {
+            "description": "Создано"
+          },
+          "401": {
+            "description": "Не авторизован"
+          },
+          "403": {
+            "description": "Нет права dba:READ / dba:EXEC"
+          },
+          "428": {
+            "description": "Техроли нужен заголовок X-Override-Reason"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "operation": {
+                    "type": "string",
+                    "enum": [
+                      "VACUUM",
+                      "ANALYZE",
+                      "REINDEX"
+                    ]
+                  },
+                  "target": {
+                    "type": "string",
+                    "description": "Имя таблицы в public (необязательно)"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/stats": {
+      "get": {
+        "tags": [
+          "stats"
+        ],
+        "summary": "Разделы статистики, доступные текущей роли",
+        "responses": {
+          "200": {
+            "description": "Список ключей разделов"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/stats/{section}": {
+      "parameters": [
+        {
+          "name": "section",
+          "in": "path",
+          "required": true,
+          "description": "main | animals | employees | users | audit | backups | pasture | stock | tasks",
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "get": {
+        "tags": [
+          "stats"
+        ],
+        "summary": "Карточки показателей страницы",
+        "description": "Карточка: {key, label, value, unit?, hint?, tone?}.tones: ok | warn | bad | info. Нет прав на раздел — 403.",
+        "responses": {
+          "200": {
+            "description": "Плашка показателей раздела"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/employees": {
+      "get": {
+        "tags": [
+          "employees"
+        ],
+        "summary": "Реестр сотрудников (ПДн зашифрованы, отдаётся phone_mask)",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Поиск по текстовым полям"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 25,
+              "maximum": 200
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 0
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "position_id",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "is_active",
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "pii",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "yes",
+                "no"
+              ]
+            }
+          },
+          {
+            "name": "assigned",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "yes",
+                "no"
+              ]
+            }
+          },
+          {
+            "name": "online",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          },
+          {
+            "name": "include_deleted",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Сотрудники с расчётными полями position_name, phone_mask, assigned_count, has_pii, is_online"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "employees"
+        ],
+        "summary": "Создать сотрудника (ПДн шифруются на сервере)",
+        "parameters": [
+          {
+            "name": "X-Override-Reason",
+            "in": "header",
+            "required": false,
+            "description": "Обязательно для технических ролей (SUPERUSER, DBA): ASCII, причина действия, до 500 символов",
+            "schema": {
+              "type": "string",
+              "maxLength": 500
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "full_name": {
+                    "type": "string"
+                  },
+                  "position_id": {
+                    "type": "integer"
+                  },
+                  "hire_date": {
+                    "type": "string",
+                    "format": "date"
+                  },
+                  "phone": {
+                    "type": "string"
+                  },
+                  "passport": {
+                    "type": "string"
+                  },
+                  "address": {
+                    "type": "string"
+                  },
+                  "snils": {
+                    "type": "string"
+                  },
+                  "inn": {
+                    "type": "string"
+                  },
+                  "bank_account": {
+                    "type": "string"
+                  },
+                  "emergency_contact": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "full_name",
+                  "position_id"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Сотрудник создан"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/employees/{id}": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "integer"
+          }
+        }
+      ],
+      "get": {
+        "tags": [
+          "employees"
+        ],
+        "summary": "Карточка сотрудника: реквизиты, закрепления, учётные записи",
+        "responses": {
+          "200": {
+            "description": "Карточка"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "employees"
+        ],
+        "summary": "Изменить реквизиты (ПДн — только через /pii)",
+        "parameters": [
+          {
+            "name": "X-Override-Reason",
+            "in": "header",
+            "required": false,
+            "description": "Обязательно для технических ролей (SUPERUSER, DBA): ASCII, причина действия, до 500 символов",
+            "schema": {
+              "type": "string",
+              "maxLength": 500
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "full_name": {
+                    "type": "string"
+                  },
+                  "position_id": {
+                    "type": "integer"
+                  },
+                  "hire_date": {
+                    "type": "string",
+                    "format": "date"
+                  }
+                },
+                "required": []
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Обновлено"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "employees"
+        ],
+        "summary": "Мягкое удаление сотрудника (обязательна причина в теле)",
+        "parameters": [
+          {
+            "name": "X-Override-Reason",
+            "in": "header",
+            "required": false,
+            "description": "Обязательно для технических ролей (SUPERUSER, DBA): ASCII, причина действия, до 500 символов",
+            "schema": {
+              "type": "string",
+              "maxLength": 500
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "reason": {
+                    "type": "string",
+                    "minLength": 3,
+                    "maxLength": 500,
+                    "description": "Причина обязательна, попадает в аудит"
+                  }
+                },
+                "required": [
+                  "reason"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Удалено"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/employees/{id}/pii": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "integer"
+          }
+        }
+      ],
+      "get": {
+        "tags": [
+          "employees"
+        ],
+        "summary": "Расшифровать ПДн (employee:PII), аудит READ_PII",
+        "responses": {
+          "200": {
+            "description": "{employee_id, full_name, values, key_version, updated_at}"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "employees"
+        ],
+        "summary": "Записать ПДн (pgcrypto, ключ только в окружении сервера)",
+        "parameters": [
+          {
+            "name": "X-Override-Reason",
+            "in": "header",
+            "required": false,
+            "description": "Обязательно для технических ролей (SUPERUSER, DBA): ASCII, причина действия, до 500 символов",
+            "schema": {
+              "type": "string",
+              "maxLength": 500
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "phone": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "passport": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "address": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "snils": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "inn": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "bank_account": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "emergency_contact": {
+                    "type": "string",
+                    "nullable": true
+                  }
+                },
+                "required": []
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "ПДн сохранены"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/employees/{id}/dismiss": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "integer"
+          }
+        }
+      ],
+      "post": {
+        "tags": [
+          "employees"
+        ],
+        "summary": "Уволить: закрыть закрепления, заблокировать учётные записи, отозвать сессии",
+        "parameters": [
+          {
+            "name": "X-Override-Reason",
+            "in": "header",
+            "required": false,
+            "description": "Обязательно для технических ролей (SUPERUSER, DBA): ASCII, причина действия, до 500 символов",
+            "schema": {
+              "type": "string",
+              "maxLength": 500
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "dismissal_reason": {
+                    "type": "string",
+                    "minLength": 3,
+                    "maxLength": 500,
+                    "description": "Причина обязательна, попадает в аудит"
+                  },
+                  "dismissed_at": {
+                    "type": "string",
+                    "format": "date-time"
+                  }
+                },
+                "required": [
+                  "dismissal_reason"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Сотрудник уволен"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/employees/{id}/reinstate": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "integer"
+          }
+        }
+      ],
+      "post": {
+        "tags": [
+          "employees"
+        ],
+        "summary": "Восстановить сотрудника",
+        "parameters": [
+          {
+            "name": "X-Override-Reason",
+            "in": "header",
+            "required": false,
+            "description": "Обязательно для технических ролей (SUPERUSER, DBA): ASCII, причина действия, до 500 символов",
+            "schema": {
+              "type": "string",
+              "maxLength": 500
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Сотрудник восстановлен"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/employees/{id}/assignments": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "integer"
+          }
+        }
+      ],
+      "get": {
+        "tags": [
+          "assignments"
+        ],
+        "summary": "Закрепления сотрудника",
+        "responses": {
+          "200": {
+            "description": "Список закреплений"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "assignments"
+        ],
+        "summary": "Закрепить сотрудника за животным",
+        "parameters": [
+          {
+            "name": "X-Override-Reason",
+            "in": "header",
+            "required": false,
+            "description": "Обязательно для технических ролей (SUPERUSER, DBA): ASCII, причина действия, до 500 символов",
+            "schema": {
+              "type": "string",
+              "maxLength": 500
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "animal_id": {
+                    "type": "integer"
+                  },
+                  "role_code": {
+                    "type": "string",
+                    "enum": [
+                      "VET",
+                      "HERDSMAN",
+                      "FOREMAN",
+                      "ZOOTECHNIK"
+                    ]
+                  },
+                  "note": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "animal_id",
+                  "role_code"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Закрепление создано"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/animals/herd": {
+      "get": {
+        "tags": [
+          "animals"
+        ],
+        "summary": "Сводка бригадира: группы, животные без закрепления, сотрудники, показатели",
+        "responses": {
+          "200": {
+            "description": "{groups, unassigned, employees, stats}"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/animals/{id}/assignments": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "integer"
+          }
+        }
+      ],
+      "get": {
+        "tags": [
+          "assignments"
+        ],
+        "summary": "Закрепления животного",
+        "responses": {
+          "200": {
+            "description": "Список закреплений"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "assignments"
+        ],
+        "summary": "Назначить сотрудника на животное",
+        "parameters": [
+          {
+            "name": "X-Override-Reason",
+            "in": "header",
+            "required": false,
+            "description": "Обязательно для технических ролей (SUPERUSER, DBA): ASCII, причина действия, до 500 символов",
+            "schema": {
+              "type": "string",
+              "maxLength": 500
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "employee_id": {
+                    "type": "integer"
+                  },
+                  "role_code": {
+                    "type": "string",
+                    "enum": [
+                      "VET",
+                      "HERDSMAN",
+                      "FOREMAN",
+                      "ZOOTECHNIK"
+                    ]
+                  },
+                  "note": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "employee_id",
+                  "role_code"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Закрепление создано"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/animals/{id}/assignments/{assignmentId}": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "integer"
+          }
+        },
+        {
+          "name": "assignmentId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "integer"
+          }
+        }
+      ],
+      "delete": {
+        "tags": [
+          "assignments"
+        ],
+        "summary": "Закрыть закрепление (при выбытии животного — автоматически)",
+        "parameters": [
+          {
+            "name": "X-Override-Reason",
+            "in": "header",
+            "required": false,
+            "description": "Обязательно для технических ролей (SUPERUSER, DBA): ASCII, причина действия, до 500 символов",
+            "schema": {
+              "type": "string",
+              "maxLength": 500
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Закрепление закрыто"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/admin/users/{id}/block": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "integer"
+          }
+        }
+      ],
+      "post": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Заблокировать пользователя (причина обязательна, сессии отзываются)",
+        "parameters": [
+          {
+            "name": "X-Override-Reason",
+            "in": "header",
+            "required": false,
+            "description": "Обязательно для технических ролей (SUPERUSER, DBA): ASCII, причина действия, до 500 символов",
+            "schema": {
+              "type": "string",
+              "maxLength": 500
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "reason": {
+                    "type": "string",
+                    "minLength": 3,
+                    "maxLength": 500,
+                    "description": "Причина обязательна, попадает в аудит"
+                  }
+                },
+                "required": [
+                  "reason"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Состояние изменено"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/admin/users/{id}/unblock": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "integer"
+          }
+        }
+      ],
+      "post": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Разблокировать пользователя (причина обязательна)",
+        "parameters": [
+          {
+            "name": "X-Override-Reason",
+            "in": "header",
+            "required": false,
+            "description": "Обязательно для технических ролей (SUPERUSER, DBA): ASCII, причина действия, до 500 символов",
+            "schema": {
+              "type": "string",
+              "maxLength": 500
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "reason": {
+                    "type": "string",
+                    "minLength": 3,
+                    "maxLength": 500,
+                    "description": "Причина обязательна, попадает в аудит"
+                  }
+                },
+                "required": [
+                  "reason"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Состояние изменено"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/admin/users/{id}/generate-password": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "integer"
+          }
+        }
+      ],
+      "post": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Сгенерировать временный пароль (показывается один раз, must_change_pw=TRUE)",
+        "parameters": [
+          {
+            "name": "X-Override-Reason",
+            "in": "header",
+            "required": false,
+            "description": "Обязательно для технических ролей (SUPERUSER, DBA): ASCII, причина действия, до 500 символов",
+            "schema": {
+              "type": "string",
+              "maxLength": 500
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "{..., password, must_change_pw}"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/admin/users/{id}/sessions": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "integer"
+          }
+        }
+      ],
+      "get": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Сессии пользователя",
+        "responses": {
+          "200": {
+            "description": "Активные сессии"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/admin/users/{id}/revoke-sessions": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "integer"
+          }
+        }
+      ],
+      "post": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Отозвать все сессии пользователя",
+        "parameters": [
+          {
+            "name": "X-Override-Reason",
+            "in": "header",
+            "required": false,
+            "description": "Обязательно для технических ролей (SUPERUSER, DBA): ASCII, причина действия, до 500 символов",
+            "schema": {
+              "type": "string",
+              "maxLength": 500
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "{revoked}"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/admin/roles/{id}/permissions": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "integer"
+          }
+        }
+      ],
+      "get": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Матрица прав роли: {all, granted}",
+        "responses": {
+          "200": {
+            "description": "Права роли"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Заменить права роли (DBA: только чтение бизнес-объектов + user/tech/dba/backup)",
+        "parameters": [
+          {
+            "name": "X-Override-Reason",
+            "in": "header",
+            "required": false,
+            "description": "Обязательно для технических ролей (SUPERUSER, DBA): ASCII, причина действия, до 500 символов",
+            "schema": {
+              "type": "string",
+              "maxLength": 500
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "permission_ids": {
+                    "type": "array",
+                    "items": {
+                      "type": "integer"
+                    }
+                  },
+                  "reason": {
+                    "type": "string",
+                    "maxLength": 500
+                  }
+                },
+                "required": [
+                  "permission_ids"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Права обновлены"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/admin/audit-log/users": {
+      "get": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Сводка по пользователям в аудите: события, отказы, последнее событие",
+        "responses": {
+          "200": {
+            "description": "Сводка"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/admin/audit-log/violations": {
+      "get": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Отбор некорректных действий (DENY, отказ доступа)",
+        "responses": {
+          "200": {
+            "description": "Нарушения"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/tech/backups/overview": {
+      "get": {
+        "tags": [
+          "tech"
+        ],
+        "summary": "Всё для страницы «Резервные копии» одним ответом",
+        "description": "current, settings (период/хранение), history, restores, files, scheduler, last_failure, schedule_due",
+        "responses": {
+          "200": {
+            "description": "Сводка по копиям и восстановлениям"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/tech/backups/schedule": {
+      "get": {
+        "tags": [
+          "tech"
+        ],
+        "summary": "Настройки периода копирования",
+        "responses": {
+          "200": {
+            "description": "Настройки"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "tech"
+        ],
+        "summary": "Изменить период копирования и хранение",
+        "parameters": [
+          {
+            "name": "X-Override-Reason",
+            "in": "header",
+            "required": false,
+            "description": "Обязательно для технических ролей (SUPERUSER, DBA): ASCII, причина действия, до 500 символов",
+            "schema": {
+              "type": "string",
+              "maxLength": 500
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "backup_enabled": {
+                    "type": "boolean"
+                  },
+                  "backup_schedule": {
+                    "type": "string",
+                    "enum": [
+                      "DAILY",
+                      "WEEKLY",
+                      "OFF"
+                    ]
+                  },
+                  "backup_time": {
+                    "type": "string",
+                    "example": "02:00"
+                  },
+                  "backup_retention_days": {
+                    "type": "integer"
+                  },
+                  "backup_keep_last": {
+                    "type": "integer"
+                  }
+                },
+                "required": []
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Настройки сохранены"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/tech/backups/schedule/run": {
+      "post": {
+        "tags": [
+          "tech"
+        ],
+        "summary": "Выполнить плановую копию сейчас",
+        "parameters": [
+          {
+            "name": "X-Override-Reason",
+            "in": "header",
+            "required": false,
+            "description": "Обязательно для технических ролей (SUPERUSER, DBA): ASCII, причина действия, до 500 символов",
+            "schema": {
+              "type": "string",
+              "maxLength": 500
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Копия создана"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/tech/backups/{id}/download": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "integer"
+          }
+        }
+      ],
+      "get": {
+        "tags": [
+          "tech"
+        ],
+        "summary": "Скачать файл копии (octet-stream)",
+        "responses": {
+          "200": {
+            "description": "Файл дампа"
+          }
+        }
+      }
+    },
+    "/tech/metrics/perf": {
+      "get": {
+        "tags": [
+          "tech"
+        ],
+        "summary": "Скорость запросов к БД и вердикт «нужна ли оптимизация»",
+        "description": "samples, avg/p50/p95/p99/max_ms, slow_count, error_count, buckets, slowest, thresholds, verdict, db, slow_tables",
+        "responses": {
+          "200": {
+            "description": "Снимок метрик"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/tech/metrics/perf/reset": {
+      "post": {
+        "tags": [
+          "tech"
+        ],
+        "summary": "Сбросить накопленные метрики",
+        "parameters": [
+          {
+            "name": "X-Override-Reason",
+            "in": "header",
+            "required": false,
+            "description": "Обязательно для технических ролей (SUPERUSER, DBA): ASCII, причина действия, до 500 символов",
+            "schema": {
+              "type": "string",
+              "maxLength": 500
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Метрики сброшены"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/positions": {
+      "get": {
+        "tags": [
+          "employees"
+        ],
+        "summary": "Справочник: Должности",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Поиск по текстовым полям"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 25,
+              "maximum": 200
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 0
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Список справочника"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/breeds": {
+      "get": {
+        "tags": [
+          "catalogs"
+        ],
+        "summary": "Справочник: Породы",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Поиск по текстовым полям"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 25,
+              "maximum": 200
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 0
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Список справочника"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/diagnoses": {
+      "get": {
+        "tags": [
+          "catalogs"
+        ],
+        "summary": "Справочник: Диагнозы",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Поиск по текстовым полям"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 25,
+              "maximum": 200
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 0
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Список справочника"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/disposal-reasons": {
+      "get": {
+        "tags": [
+          "catalogs"
+        ],
+        "summary": "Справочник: Причины выбытия",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Поиск по текстовым полям"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 25,
+              "maximum": 200
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 0
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Список справочника"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/write-off-reasons": {
+      "get": {
+        "tags": [
+          "catalogs"
+        ],
+        "summary": "Справочник: Причины списания",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Поиск по текстовым полям"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 25,
+              "maximum": 200
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 0
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Список справочника"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/task-types": {
+      "get": {
+        "tags": [
+          "tasks"
+        ],
+        "summary": "Справочник: Типы задач",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Поиск по текстовым полям"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 25,
+              "maximum": 200
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 0
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Список справочника"
           },
           "400": {
             "$ref": "#/components/responses/BadRequest"

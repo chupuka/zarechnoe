@@ -127,6 +127,11 @@
                 <span id="user-role" class="user-role badge">—</span>
             </div>
 
+            <button id="actions-btn" class="btn btn-ghost header-actions" type="button"
+                    title="Палитра действий: все доступные роли операции (Ctrl+K)">
+                <span id="actions-btn-label">Действия</span> <kbd class="key-hint">Ctrl K</kbd>
+            </button>
+
             <label class="theme-switch" title="Светлая / тёмная тема">
                 <input id="theme-toggle" type="checkbox" aria-label="Переключатель темы светлая/тёмная">
                 <span class="theme-switch-track" aria-hidden="true"><span class="theme-switch-thumb"></span></span>
@@ -145,6 +150,13 @@
         -->
         <nav id="sidebar" class="sidebar" aria-label="Основная навигация">
             <div class="sidebar-scroll">
+
+                <section class="nav-group" aria-labelledby="nav-home">
+                    <h2 id="nav-home" class="nav-group-title">Обзор</h2>
+                    <ul class="nav-list">
+                        <li><a class="nav-link" href="#/home" data-view="home" data-endpoint="/stats/main">Главная</a></li>
+                    </ul>
+                </section>
 
                 <section class="nav-group" aria-labelledby="nav-reg">
                     <h2 id="nav-reg" class="nav-group-title">Реестры</h2>
@@ -166,7 +178,6 @@
                         <li><a class="nav-link" href="#/grazing"   data-view="grazing"   data-endpoint="/pasture-plots" data-permission="pasture:WRITE" data-ops="grazing">Выпас</a></li>
                         <li><a class="nav-link" href="#/movements" data-view="movements" data-endpoint="/stock/balances" data-permission="stock:WRITE"  data-ops="movements">Движения склада</a></li>
                     </ul>
-                    <p class="nav-note">POST /grazing/move · POST /stock/movements · POST /tasks/:id/execute · POST /animals/:id/status</p>
                 </section>
 
                 <section class="nav-group" aria-labelledby="nav-an">
@@ -179,28 +190,36 @@
                         <li><a class="nav-link" href="#/tasks-in-work"data-view="tasks-in-work"data-endpoint="/reports/tasks-in-work"  data-permission="report:READ" data-report="1">Задачи в работе</a></li>
                         <li><a class="nav-link" href="#/stock-turnover"data-view="stock-turnover"data-endpoint="/reports/stock-turnover" data-permission="report:READ" data-report="1">Остатки склада</a></li>
                     </ul>
-                    <p class="nav-note">Отчёты: {data, total, limit, offset, series}</p>
                 </section>
 
                 <section class="nav-group" aria-labelledby="nav-adm">
                     <h2 id="nav-adm" class="nav-group-title">Администрирование</h2>
                     <ul class="nav-list">
-                        <li><a class="nav-link" href="#/users"    data-view="users"    data-endpoint="/admin/users"      data-permission="user:READ">Пользователи</a></li>
-                        <li><a class="nav-link" href="#/roles"    data-view="roles"    data-endpoint="/admin/users"      data-permission="user:WRITE">Роли и права</a></li>
-                        <li><a class="nav-link" href="#/audit"    data-view="audit"    data-endpoint="/admin/audit-log"  data-permission="audit:READ">Журнал аудита</a></li>
-                        <li><a class="nav-link" href="#/settings" data-view="settings" data-endpoint="/admin/users"      data-permission="settings:READ">Настройки</a></li>
+                        <li><a class="nav-link" href="#/users"    data-view="admin-users" data-endpoint="/admin/users"      data-permission="user:READ">Пользователи</a></li>
+                        <li><a class="nav-link" href="#/roles"    data-view="roles"    data-endpoint="/admin/roles"      data-permission="user:READ">Роли и права</a></li>
+                        <li><a class="nav-link" href="#/audit"    data-view="audit-log" data-endpoint="/admin/audit-log"  data-permission="audit:READ">Журнал аудита</a></li>
+                        <li><a class="nav-link" href="#/settings" data-view="settings" data-endpoint="/admin/settings"   data-permission="settings:READ">Настройки</a></li>
                     </ul>
                 </section>
 
                 <section class="nav-group" aria-labelledby="nav-tech">
                     <h2 id="nav-tech" class="nav-group-title">Технадминка</h2>
                     <ul class="nav-list">
-                        <li><a class="nav-link" href="#/backups"  data-view="backups"  data-endpoint="/tech/backups"       data-permission="backup:READ" data-tech="1">Резервные копии</a></li>
-                        <li><a class="nav-link" href="#/restores" data-view="restores" data-endpoint="/tech/backups"       data-permission="backup:EXEC" data-tech="1">Восстановления</a></li>
-                        <li><a class="nav-link" href="#/tech-log" data-view="tech-log" data-endpoint="/admin/audit-log"   data-permission="tech:READ"   data-tech="1">Тех. лог</a></li>
-                        <li><a class="nav-link" href="#/metrics"  data-view="metrics"  data-endpoint="/reports/dashboard" data-permission="tech:READ"   data-tech="1">Метрики</a></li>
+                        <li><a class="nav-link" href="#/backups"  data-view="backups"  data-endpoint="/tech/backups/overview" data-permission="backup:READ" data-tech="1">Резервные копии</a></li>
+                        <li><a class="nav-link" href="#/tech-log" data-view="tech-log" data-endpoint="/tech/log"          data-permission="tech:READ"   data-tech="1">Тех. лог</a></li>
+                        <li><a class="nav-link" href="#/metrics"  data-view="metrics"  data-endpoint="/tech/metrics/perf" data-permission="tech:READ"   data-tech="1">Скорость БД</a></li>
                     </ul>
                     <p class="nav-note">Запросы техролей → <code>X-Override-Reason</code></p>
+                </section>
+
+                <section class="nav-group" aria-labelledby="nav-dba">
+                    <h2 id="nav-dba" class="nav-group-title">Администратор БД</h2>
+                    <ul class="nav-list">
+                        <li><a class="nav-link" href="#/dba-migrations" data-view="dba-migrations" data-endpoint="/dba/migrations" data-permission="dba:READ" data-tech="1">Миграции схемы</a></li>
+                        <li><a class="nav-link" href="#/dba-monitor"    data-view="dba-monitor"    data-endpoint="/dba/monitor/health" data-permission="dba:READ" data-tech="1">Мониторинг БД</a></li>
+                        <li><a class="nav-link" href="#/dba-backups"    data-view="dba-backups"    data-endpoint="/dba/backups/files" data-permission="dba:READ" data-tech="1">Копии на диске</a></li>
+                    </ul>
+                    <p class="nav-note">Техлог отдельно от бизнес-аудита</p>
                 </section>
 
             </div>
@@ -219,38 +238,11 @@
                 </div>
             </div>
 
-            <!-- Панель фильтров: app.js наполняет по текущему разделу -->
-            <section id="filters" class="filters" aria-label="Фильтры">
-                <div class="filters-row">
-                    <label class="field field-inline">
-                        <span class="field-label">Поиск</span>
-                        <input id="filter-search" type="search" class="field-input" placeholder="Поиск…" data-hotkey="/">
-                    </label>
-                    <label class="field field-inline">
-                        <span class="field-label">С</span>
-                        <input id="filter-from" type="date" class="field-input">
-                    </label>
-                    <label class="field field-inline">
-                        <span class="field-label">По</span>
-                        <input id="filter-to" type="date" class="field-input">
-                    </label>
-                    <label class="field field-inline">
-                        <span class="field-label">Статус</span>
-                        <select id="filter-status" class="field-input"><option value="">Все</option></select>
-                    </label>
-                    <label class="field field-inline">
-                        <span class="field-label">На странице</span>
-                        <select id="filter-limit" class="field-input">
-                            <option value="25">25</option>
-                            <option value="50">50</option>
-                            <option value="100">100</option>
-                        </select>
-                    </label>
-                    <button id="filters-apply" class="btn btn-ghost" type="button">Применить</button>
-                    <button id="filters-reset" class="btn btn-ghost" type="button">Сбросить</button>
-                </div>
-                <div id="filters-extra" class="filters-extra" hidden></div>
-            </section>
+            <!-- Плашка показателей раздела: app.js загружает GET /stats/:section -->
+            <section id="stat-strip" class="stat-strip" aria-label="Показатели раздела" hidden></section>
+
+            <!-- Панель инструментов раздела: фильтры по полям (app.js строит по PAGES.filters) -->
+            <section id="page-tools" class="page-tools" aria-label="Фильтры раздела" hidden></section>
 
             <!-- Таблицы / карточки / отчёты рендерятся сюда -->
             <section id="view" class="view" aria-live="polite" aria-busy="false">
@@ -282,24 +274,37 @@
                 </div>
             </section>
 
-            <!-- Пагинация: {total, limit, offset} -->
+            <!-- Пагинация: {total, limit, offset} + размер страницы -->
             <footer id="pager" class="pager" aria-label="Пагинация">
                 <span id="pager-info" class="pager-info">Всего: 0</span>
                 <div class="pager-controls">
                     <button id="pager-prev" class="btn btn-ghost" type="button" disabled>← Назад</button>
                     <span id="pager-page" class="pager-page">1 / 1</span>
                     <button id="pager-next" class="btn btn-ghost" type="button" disabled>Вперёд →</button>
+                    <label class="pager-limit" title="Сколько записей показывать на странице">
+                        <span class="field-label">На странице</span>
+                        <select id="pager-limit" class="field-input">
+                            <option value="25">25</option>
+                            <option value="50">50</option>
+                            <option value="100">100</option>
+                        </select>
+                    </label>
                 </div>
             </footer>
-        </main>
 
-        <!-- ---------- Подсказка hotkeys ---------- -->
-        <footer id="hotkeys-bar" class="hotkeys-bar" aria-label="Горячие клавиши">
-            <span class="hotkeys-hint">
-                <kbd>?</kbd> справка · <kbd>/</kbd> поиск · <kbd>n</kbd> создать · <kbd>r</kbd> обновить · <kbd>Esc</kbd> закрыть
-            </span>
-            <button id="help-open" class="btn btn-ghost btn-sm" type="button" aria-haspopup="dialog">?</button>
-        </footer>
+            <!-- ---------- Подсказка горячих клавиш (по роли и разделу) ---------- -->
+            <footer id="hotkeys-bar" class="hotkeys-bar" aria-label="Горячие клавиши">
+                <span id="hotkeys-hint" class="hotkeys-hint"></span>
+                <span class="hotkeys-actions">
+                    <button id="hotkeys-actions-btn" class="btn btn-ghost btn-sm" type="button"
+                            title="Все доступные вам действия (Ctrl+K)">
+                        <span class="hotkeys-actions-label">Действия</span> <kbd class="key-hint">Ctrl K</kbd>
+                    </button>
+                    <button id="help-open" class="btn btn-ghost btn-sm" type="button" aria-haspopup="dialog"
+                            title="Справка по горячим клавишам вашей роли">?</button>
+                </span>
+            </footer>
+        </main>
     </div>
 
     <!-- ============================================================
@@ -338,30 +343,55 @@
             <button id="help-close" class="icon-btn" type="button" aria-label="Закрыть справку">×</button>
         </header>
         <div class="help-body">
-            <h3>Горячие клавиши</h3>
-            <dl class="help-keys">
-                <dt><kbd>?</kbd></dt><dd>Открыть эту справку</dd>
-                <dt><kbd>/</kbd></dt><dd>Фокус на поле поиска</dd>
-                <dt><kbd>n</kbd></dt><dd>Создать запись (если есть право WRITE)</dd>
-                <dt><kbd>r</kbd></dt><dd>Обновить текущий раздел</dd>
-                <dt><kbd>g</kbd> …</dt><dd>Быстрый переход: <kbd>g a</kbd> животные, <kbd>g s</kbd> склад, <kbd>g d</kbd> дашборд</dd>
-                <dt><kbd>Esc</kbd></dt><dd>Закрыть модальное окно / справку / карту</dd>
-            </dl>
-            <h3>Данные и доступ</h3>
-            <ul class="help-list">
-                <li>Все списки: <code>GET /api/v1/…</code> → <code>{data, total, limit, offset}</code>.</li>
-                <li>Отчёты дополнительно отдают <code>series</code> → график на <code>#chart-canvas</code>.</li>
-                <li>Авторизация: <code>POST /auth/login</code>, Bearer-токен в каждом запросе.</li>
-                <li>Пункты меню с <code>data-permission</code> скрываются, если права нет в ответе логина.</li>
-                <li>Техроли (superuser, dba) при POST-запросах передают <code>X-Override-Reason</code>.</li>
-                <li>Операции: <code>/stock/movements</code>, <code>/tasks/:id/execute</code>,
-                    <code>/grazing/move</code>, <code>/animals/:id/status</code>.</li>
-            </ul>
-            <h3>Демо-роли</h3>
-            <p><code>director</code>, <code>superuser</code>, <code>dba</code>, <code>vet</code>,
-               <code>foreman</code>, <code>storekeeper</code> — пароль <code>demo1234</code>.</p>
+            <!-- Содержимое строится app.js под текущую роль и раздел -->
+            <p id="help-role" class="help-role"></p>
+            <p id="help-note" class="help-note"></p>
+            <h3 id="help-hotkeys-title">Горячие клавиши вашей роли</h3>
+            <dl id="help-keys" class="help-keys"></dl>
+            <h3 id="help-actions-title">Доступные вам действия</h3>
+            <div id="help-actions" class="help-actions"></div>
+            <h3 id="help-demo-title">Демо-роли</h3>
+            <p id="help-demo" class="help-demo"></p>
         </div>
         <footer class="modal-foot"><button id="help-ok" class="btn btn-primary" type="button">Понятно</button></footer>
+    </dialog>
+
+    <!-- ============================================================
+         ПАЛИТРА ДЕЙСТВИЙ (Ctrl+K / кнопка «Действия»)
+         Универсальный поиск по операциям, доступным текущей роли.
+         Решение-2 (после выбора действия) — поиск записи: пользователь,
+         сотрудник, животное, копия. Всё строится в app.js.
+         ============================================================ -->
+    <dialog id="action-dialog" class="action-dialog" aria-labelledby="action-title">
+        <header class="modal-head">
+            <h2 id="action-title" class="modal-title">Действия</h2>
+            <button id="action-close" class="icon-btn" type="button" aria-label="Закрыть палитру">×</button>
+        </header>
+        <div class="action-body">
+            <p id="action-context" class="action-context"></p>
+            <div id="action-step-list">
+                <label class="field">
+                    <span id="action-search-label" class="field-label">Найти действие</span>
+                    <input id="action-search" type="search" class="field-input"
+                           placeholder="Например: заблокировать пользователя" autocomplete="off">
+                </label>
+                <div id="action-list" class="action-list" role="listbox" aria-label="Доступные действия"></div>
+            </div>
+            <div id="action-step-picker" class="action-picker" hidden>
+                <p id="action-picker-title" class="notice"></p>
+                <label class="field">
+                    <span id="action-picker-label" class="field-label">Найти запись</span>
+                    <input id="action-entity-search" type="search" class="field-input"
+                           placeholder="Логин, ФИО, инв. номер…" autocomplete="off">
+                </label>
+                <div id="action-entity-list" class="action-entity-list" role="listbox" aria-label="Записи"></div>
+                <button id="action-picker-back" class="btn btn-ghost btn-sm" type="button">← Назад к действиям</button>
+            </div>
+        </div>
+        <footer class="modal-foot action-foot">
+            <span class="hint">↑↓ — выбор · Enter — выполнить · Esc — закрыть</span>
+            <button id="action-cancel" class="btn btn-ghost" type="button">Отмена</button>
+        </footer>
     </dialog>
 
     <!-- ============================================================

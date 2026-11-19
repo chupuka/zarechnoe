@@ -66,12 +66,19 @@ INSERT INTO permission (code, object_name, action, description) VALUES
  ('backup:READ','backup','READ','Просмотр резервных копий и восстановлений'),
  ('backup:EXEC','backup','EXEC','Запуск резервного копирования и восстановления');
 
+-- Администратор БД (расширение): миграции схемы и мониторинг производительности.
+-- Отдельный namespace dba:* (не tech:*), чтобы расширение жило независимо
+-- от прав Недели 6. Доступ — только у TECHNICAL-ролей.
+INSERT INTO permission (code, object_name, action, description) VALUES
+ ('dba:READ','dba','READ','Админ БД: миграции, бэкапы, мониторинг — просмотр'),
+ ('dba:EXEC','dba','EXEC','Админ БД: применение миграций, откат, обслуживание');
+
 INSERT INTO role_permission (role_id, permission_id)
 SELECT r.id, p.id
 FROM role r
 JOIN (VALUES
  ('DIRECTOR', ARRAY['animal:READ','group:READ','health:READ','disposal:READ','ration:READ',
-                     'stock:READ','purchase:READ','pasture:READ','task:READ','product:READ',
+                     'stock:READ','purchase:READ','pasture:READ','pasture:WRITE','task:READ','product:READ',
                      'period:READ','period:EXEC','report:READ','export:EXEC',
                      'user:READ','user:WRITE','settings:READ','settings:WRITE','audit:READ',
                      'catalog:READ','catalog:WRITE','employee:READ','employee:WRITE','backup:READ']),
@@ -86,7 +93,8 @@ JOIN (VALUES
                      'catalog:READ','catalog:WRITE','employee:READ','employee:WRITE',
                      'backup:READ','backup:EXEC']),
  ('DBA', ARRAY['tech:READ','tech:EXEC','audit:READ','settings:READ','user:READ','report:READ',
-               'catalog:READ','employee:READ','backup:READ','backup:EXEC']),
+               'catalog:READ','employee:READ','backup:READ','backup:EXEC',
+               'dba:READ','dba:EXEC']),
  ('VET', ARRAY['animal:READ','animal:WRITE','group:READ','group:WRITE',
                'health:READ','health:WRITE','health:DELETE','disposal:READ','disposal:WRITE',
                'ration:READ','ration:WRITE','stock:READ','task:READ','task:WRITE',

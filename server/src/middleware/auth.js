@@ -19,7 +19,7 @@ async function authenticate(req, res, next) {
         }
 
         const { rows } = await query(
-            `SELECT s.id AS session_id, s.expires_at, s.revoked_at,
+            `SELECT s.id AS session_id, s.expires_at, s.revoked_at, s.last_seen_at,
                     u.id, u.login, u.full_name, u.employee_id, u.is_active, u.is_deleted,
                     r.id AS role_id, r.code AS role_code, r.name AS role_name, r.role_type
              FROM user_session s
@@ -48,6 +48,15 @@ async function authenticate(req, res, next) {
              WHERE rp.role_id = $1`,
             [s.role_id]
         );
+
+        // Отметка активности для индикатора «онлайн» (см. v_user_overview /
+        // v_employee_overview: онлайн = активность за последние 15 минут).
+        // Обновляем не чаще раза в минуту, чтобы не писать в БД на каждый запрос.
+        const seen = new Date(s.last_seen_at || 0).getTime();
+        if (!seen || Date.now() - seen > 60000) {
+            query('UPDATE user_session SET last_seen_at = now() WHERE id = $1', [s.session_id])
+                .catch((err) => console.error('last_seen update:', err.message));
+        }
 
         req.user = {
             id: s.id,

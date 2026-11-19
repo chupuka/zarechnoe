@@ -21,12 +21,13 @@ const OVERRIDE_KEY = 'zarechnoe.override';
 const DEFAULT_LIMIT = 25;
 const MAX_LIMIT = 200;
 
-const ANIMAL_STATUSES = ['ЗДОРОВ', 'НА_ОСМОТРЕ', 'НА_КАРАНТИНЕ', 'НА_ЛЕЧЕНИИ', 'ВЫБРАКОВАНО', 'ПАДЁЖ'];
-const TASK_STATUSES = ['NEW', 'IN_WORK', 'CLOSED', 'CANCELLED'];
+const ANIMAL_STATUSES = ['ЗДОРОВ', 'НА_ОСМОТРЕ', 'НА_КАРАНТИНЕ', 'НА_ЛЕЧЕНИИ', 'НА_ПРОДАЖЕ', 'ПРОДАН', 'ВЫБРАКОВАНО', 'ПАДЁЖ'];
+const TASK_STATUSES = ['NEW', 'IN_WORK', 'DONE', 'CANCELLED'];
 const PRIORITIES = ['LOW', 'NORMAL', 'HIGH'];
 const MOVEMENT_TYPES = ['RECEIPT', 'ISSUE', 'WRITE_OFF', 'RETURN'];
 const BACKUP_STATUSES = ['RUNNING', 'OK', 'FAILED'];
-const AUDIT_ACTIONS = ['LOGIN', 'CREATE', 'UPDATE', 'DELETE', 'DENY', 'EXPORT'];
+const AUDIT_ACTIONS = ['LOGIN', 'CREATE', 'UPDATE', 'DELETE', 'DENY', 'EXPORT', 'READ_PII'];
+const ASSIGN_ROLES = ['VET', 'HERDSMAN', 'FOREMAN', 'ZOOTECHNIK'];
 
 /* RU/EN словарь: все динамические подписи идут через t(). */
 const I18N = {
@@ -41,7 +42,13 @@ const I18N = {
         'create': '+ Создать', 'search': 'Поиск', 'searchPh': 'Поиск…',
         'from': 'С', 'to': 'По', 'status': 'Статус', 'limit': 'На странице',
         'all': 'Все', 'apply': 'Применить', 'reset': 'Сбросить',
-        'actions': 'Действия', 'edit': 'Изменить', 'delete': 'Удалить', 'save': 'Сохранить',
+        'actions': 'Действия', 'actions.palette': 'Действия', 'action.search': 'Найти действие',
+        'action.entity': 'Найти запись', 'action.context': 'Все операции, доступные вашей роли. Выберите действие — при необходимости появится поиск записи.',
+        'action.empty': 'Ничего не найдено. Попробуйте другой запрос или проверьте права роли.',
+        'action.pick': 'Выберите запись', 'action.back': '← Назад к действиям',
+        'admin.block': 'Блокировка пользователя',
+        'help.role': 'Справка для роли', 'help.note': 'Список ниже собран из ваших прав: действий, которых у роли нет, в нём не бывает.',
+        'edit': 'Изменить', 'delete': 'Удалить', 'save': 'Сохранить',
         'cancel': 'Отмена', 'yes': 'Да', 'no': 'Нет', 'confirmDelete': 'Удалить запись?',
         'confirmDeleteMsg': 'Запись будет удалена. Отменить действие будет невозможно.',
         'prev': '← Назад', 'next': 'Вперёд →', 'total': 'Всего',
@@ -107,7 +114,13 @@ const I18N = {
         'create': '+ Create', 'search': 'Search', 'searchPh': 'Search…',
         'from': 'From', 'to': 'To', 'status': 'Status', 'limit': 'Rows per page',
         'all': 'All', 'apply': 'Apply', 'reset': 'Reset',
-        'actions': 'Actions', 'edit': 'Edit', 'delete': 'Delete', 'save': 'Save',
+        'actions': 'Actions', 'actions.palette': 'Actions', 'action.search': 'Find an action',
+        'action.entity': 'Find a record', 'action.context': 'Every operation your role is allowed to run. Pick one — a record picker appears when needed.',
+        'action.empty': 'Nothing found. Try another query or check your role permissions.',
+        'action.pick': 'Pick a record', 'action.back': '← Back to actions',
+        'admin.block': 'Block a user',
+        'help.role': 'Help for role', 'help.note': 'The list below is built from your permissions: actions your role lacks are never shown.',
+        'edit': 'Edit', 'delete': 'Delete', 'save': 'Save',
         'cancel': 'Cancel', 'yes': 'Yes', 'no': 'No', 'confirmDelete': 'Delete record?',
         'confirmDeleteMsg': 'The record will be deleted. This action cannot be undone.',
         'prev': '← Prev', 'next': 'Next →', 'total': 'Total',
@@ -201,6 +214,14 @@ const COLUMN_LABELS = {
     login: ['Логин', 'Login'], role_id: ['ID роли', 'Role ID'],
     role_code: ['Роль', 'Role'], role_name: ['Роль', 'Role'], role_type: ['Тип роли', 'Role type'],
     employee_id: ['ID сотрудника', 'Employee ID'], employee_name: ['Сотрудник', 'Employee'],
+    position_name: ['Должность', 'Position'], phone_mask: ['Телефон (маска)', 'Phone (mask)'],
+    has_pii: ['ПДн заполнены', 'PII filled'], assigned_count: ['Закреплений', 'Assignments'],
+    assigned_names: ['Кто закреплён', 'Assigned to'], is_online: ['Онлайн', 'Online'],
+    last_seen_at: ['Был(а) онлайн', 'Last seen'], blocked_reason: ['Причина блокировки', 'Block reason'],
+    sessions_count: ['Сессий', 'Sessions'], accounts_count: ['Учётных записей', 'Accounts'],
+    dismissed_at: ['Дата увольнения', 'Dismissed at'],
+    dismissal_reason: ['Причина увольнения', 'Dismissal reason'],
+    restores: ['Восстановлений', 'Restores'], origin: ['Источник', 'Origin'],
     must_change_pw: ['Смена пароля', 'Must change pw'], failed_cnt: ['Неуд. входы', 'Failed logins'],
     locked_until: ['Блокировка до', 'Locked until'], last_login_at: ['Последний вход', 'Last login'],
     occurred_at: ['Когда', 'Occurred at'], user_id: ['ID пользователя', 'User ID'],
@@ -272,8 +293,9 @@ const COLUMN_LABELS = {
     value: ['Значение', 'Value'], override: ['Причина (X-Override-Reason)', 'Reason (X-Override-Reason)']
 };
 
-/* Пункты меню: data-view → [RU, EN]. */
+/* Пункты меню: data-view → [RU, EN]. Ключи совпадают с data-view из index.html. */
 const NAV_LABELS = {
+    home: ['Главная', 'Home'],
     animals: ['Животные', 'Animals'], groups: ['Группы', 'Groups'],
     inspections: ['Осмотры', 'Inspections'], vaccinations: ['Вакцинации', 'Vaccinations'],
     stock: ['Склад', 'Stock'], plots: ['Участки', 'Plots'], tasks: ['Задачи', 'Tasks'],
@@ -284,23 +306,34 @@ const NAV_LABELS = {
     'pasture-load': ['Нагрузка на пастбища', 'Pasture load'],
     'tasks-in-work': ['Задачи в работе', 'Tasks in work'],
     'stock-turnover': ['Остатки склада', 'Stock turnover'],
-    users: ['Пользователи', 'Users'], roles: ['Роли и права', 'Roles & permissions'],
-    audit: ['Журнал аудита', 'Audit log'], settings: ['Настройки', 'Settings'],
+    'admin-users': ['Пользователи', 'Users'], users: ['Пользователи', 'Users'],
+    roles: ['Роли и права', 'Roles & permissions'],
+    'audit-log': ['Журнал аудита', 'Audit log'], audit: ['Журнал аудита', 'Audit log'],
+    settings: ['Настройки', 'Settings'],
     backups: ['Резервные копии', 'Backups'], restores: ['Восстановления', 'Restores'],
-    'tech-log': ['Тех. лог', 'Tech log'], metrics: ['Метрики', 'Metrics']
+    'tech-log': ['Тех. лог', 'Tech log'],
+    metrics: ['Скорость БД', 'DB query speed'],
+    'dba-migrations': ['Миграции схемы', 'Schema migrations'],
+    'dba-history': ['История миграций', 'Migration history'],
+    'dba-monitor': ['Мониторинг БД', 'DB monitoring'],
+    'dba-backups': ['Копии на диске', 'Backup files']
 };
 const NAV_GROUP_LABELS = {
+    'Обзор': ['Обзор', 'Overview'],
     'Реестры': ['Реестры', 'Registries'], 'Операции': ['Операции', 'Operations'],
     'Аналитика': ['Аналитика', 'Analytics'],
     'Администрирование': ['Администрирование', 'Administration'],
-    'Технадминка': ['Технадминка', 'Tech admin']
+    'Технадминка': ['Технадминка', 'Tech admin'],
+    'Администратор БД': ['Администратор БД', 'DB administrator']
 };
 
-/* Горячие клавиши (>= 8). Используются и в обработчике, и в справке. */
+/* Базовый список горячих клавиш; фактическая справка строится hotkeyRows()
+   по правам текущей роли. Константа остаётся частью публичного API модуля. */
 const HOTKEYS = [
-    ['Ctrl+K', 'hk.search'], ['?', 'hk.help'], ['I', 'hk.receipt'], ['O', 'hk.issue'],
-    ['W', 'hk.writeoff'], ['A', 'hk.assign'], ['D', 'hk.execute'], ['/', 'hk.focus'],
-    ['N', 'hk.new'], ['Esc', 'hk.close'], ['R', 'hk.refresh'], ['G …', 'hk.goto']
+    ['Ctrl+K', 'actions.palette'], ['?', 'hk.help'], ['N', 'hk.new'], ['E', 'actions.edit'],
+    ['B', 'admin.block'], ['I', 'hk.receipt'], ['O', 'hk.issue'], ['W', 'hk.writeoff'],
+    ['A', 'hk.assign'], ['D', 'hk.execute'], ['/', 'hk.focus'], ['R', 'hk.refresh'],
+    ['G …', 'hk.goto'], ['Esc', 'hk.close']
 ];
 
 /* --------------------------------------------------------------------------
@@ -315,12 +348,16 @@ const state = {
     limit: DEFAULT_LIMIT,
     offset: 0,
     total: 0,
-    filters: { q: '', from: '', to: '', status: '', limit: DEFAULT_LIMIT },
-    extra: {},                // доп. фильтры раздела
+    filters: {},                // активные фильтры текущего раздела (name -> строка)
+    extra: {},                 // резерв: вычисленные/версионные значения
     extraEndpoint: null,      // вариант эндпоинта (склад: batches/balances)
     sort: '',
     data: [],
     series: null,
+    statCards: [],            // плашка /stats/:section
+    backupData: null,         // /tech/backups/overview
+    perfData: null,           // /tech/metrics/perf
+    herdData: null,           // /animals/herd (сводка бригадира)
     theme: 'light',
     lang: 'ru',
     overrideReason: '',
@@ -462,15 +499,39 @@ function staticOpts(values) {
 }
 function opt(value, ru, en) { return { value, ru, en }; }
 
+/* ---- Декларативные фильтры раздела (рисуются в #page-tools у заголовка) ---- */
+function fSel(name, label, options, extra) {
+    return Object.assign({ name, label, type: 'select', options }, extra || {});
+}
+function fSearch(ph) { return { name: 'q', label: 'Поиск', type: 'search', ph: ph || '' }; }
+function fDate(name, label, query) { return { name, label, type: 'date', query }; }
+function fCheck(name, label) { return { name, label, type: 'checkbox' }; }
+/** Пары [значение, подпись] → опции селекта; строка → {value,label}. */
+function fPairs(values) {
+    return values.map((v) => (Array.isArray(v) ? { value: v[0], label: v[1] } : { value: v, label: String(v) }));
+}
+
 const PAGES = {
+    /* ---- Обзор: главная страница по роли ---- */
+    home: {
+        endpoint: '/stats/main', perm: null, eyebrow: ['Обзор', 'Overview'],
+        title: ['Главная', 'Home'], kind: 'home', statSection: 'main',
+        noFilters: true, noPager: true
+    },
+
     /* ---- Реестры ---- */
     animals: {
         endpoint: '/animals', perm: 'animal:READ', eyebrow: ['Реестры', 'Registries'],
-        title: ['Животные', 'Animals'], kind: 'table',
-        columns: ['id', 'inventory_number', 'breed', 'group_name', 'sex', 'birth_date', 'status', 'arrival_date'],
+        title: ['Животные', 'Animals'], kind: 'table', statSection: 'animals',
+        columns: ['id', 'inventory_number', 'breed', 'group_name', 'status', 'sex', 'birth_date', 'assigned_count', 'assigned_names'],
         sortable: ['id', 'inventory_number', 'birth_date', 'sex', 'status', 'arrival_date', 'created_at'],
-        statusValues: ANIMAL_STATUSES, writePerm: 'animal:WRITE', deletePerm: 'animal:DELETE',
-        extraFilters: [{ name: 'group_id', type: 'number', ph: 'group_id' }],
+        filters: [
+            fSearch('Инв. номер, порода'),
+            fSel('status', 'Статус', fPairs(ANIMAL_STATUSES)),
+            { name: 'group_id', label: 'Группа', type: 'select', optionsFrom: '/animals/herd', optionsPath: 'groups' },
+            fSel('unassigned', 'Закрепление', fPairs([['true', 'Без закреплений']]))
+        ],
+        writePerm: 'animal:WRITE', deletePerm: 'animal:DELETE',
         crud: {
             createFields: [
                 F('inventory_number', 'text', { required: true }),
@@ -482,12 +543,16 @@ const PAGES = {
             ],
             editFields: [F('inventory_number', 'text'), F('breed_id', 'select', { optionsFrom: '/breeds' }), F('group_id', 'number', { nullable: true })]
         },
-        rowActions: [{ key: 'status', label: ['Статус', 'Status'], perm: 'animal:WRITE', run: (row) => openAnimalStatus(row) }]
+        rowActions: [
+            { key: 'status', label: ['Статус', 'Status'], perm: 'animal:WRITE', run: (row) => openAnimalStatus(row) },
+            { key: 'assign', label: ['Закрепить', 'Assign'], perm: 'animal:WRITE', run: (row) => openAnimalAssign(row) }
+        ]
     },
     groups: {
         endpoint: '/species', perm: 'group:READ', eyebrow: ['Реестры', 'Registries'],
         title: ['Группы (виды)', 'Groups (species)'], kind: 'table',
         columns: [], sortable: ['id', 'code', 'name'], writePerm: 'catalog:WRITE', deletePerm: 'catalog:WRITE',
+        filters: [fSearch('Код или название')],
         crud: {
             createFields: [F('code', 'text', { required: true }), F('name', 'text', { required: true })],
             editFields: [F('code', 'text'), F('name', 'text')]
@@ -495,23 +560,28 @@ const PAGES = {
     },
     inspections: {
         endpoint: '/animals', perm: 'health:READ', eyebrow: ['Реестры', 'Registries'],
-        title: ['Осмотры', 'Inspections'], kind: 'table',
-        columns: ['id', 'inventory_number', 'breed', 'group_name', 'status', 'birth_date'],
-        sortable: ['inventory_number', 'birth_date', 'status'], statusValues: ANIMAL_STATUSES,
-        preset: { status: 'НА_ОСМОТРЕ' }
+        title: ['Осмотры', 'Inspections'], kind: 'table', statSection: 'animals',
+        columns: ['id', 'inventory_number', 'breed', 'group_name', 'status', 'birth_date', 'assigned_names'],
+        sortable: ['inventory_number', 'birth_date', 'status'],
+        filters: [fSearch('Инв. номер'), fSel('status', 'Статус', fPairs(ANIMAL_STATUSES))],
+        preset: { status: 'НА_ОСМОТРЕ' },
+        rowActions: [{ key: 'status', label: ['Статус', 'Status'], perm: 'animal:WRITE', run: (row) => openAnimalStatus(row) }]
     },
     vaccinations: {
         endpoint: '/animals', perm: 'health:READ', eyebrow: ['Реестры', 'Registries'],
-        title: ['Вакцинации', 'Vaccinations'], kind: 'table',
-        columns: ['id', 'inventory_number', 'breed', 'group_name', 'status', 'arrival_date'],
-        sortable: ['inventory_number', 'arrival_date', 'status'], statusValues: ANIMAL_STATUSES,
-        preset: { status: 'НА_ЛЕЧЕНИИ' }
+        title: ['Вакцинации', 'Vaccinations'], kind: 'table', statSection: 'animals',
+        columns: ['id', 'inventory_number', 'breed', 'group_name', 'status', 'arrival_date', 'assigned_names'],
+        sortable: ['inventory_number', 'arrival_date', 'status'],
+        filters: [fSearch('Инв. номер'), fSel('status', 'Статус', fPairs(ANIMAL_STATUSES))],
+        preset: { status: 'НА_ЛЕЧЕНИИ' },
+        rowActions: [{ key: 'status', label: ['Статус', 'Status'], perm: 'animal:WRITE', run: (row) => openAnimalStatus(row) }]
     },
     stock: {
         endpoint: '/stock/batches', perm: 'stock:READ', eyebrow: ['Реестры', 'Registries'],
-        title: ['Склад', 'Stock'], kind: 'table',
+        title: ['Склад', 'Stock'], kind: 'table', statSection: 'stock',
         columns: ['id', 'batch_number', 'nomenclature', 'sku', 'warehouse', 'qty_on_hand', 'received_at', 'expiry_date', 'unit_cost'],
         sortable: ['id', 'batch_number', 'received_at', 'expiry_date', 'qty_on_hand'],
+        filters: [fSearch('Партия, номенклатура, SKU')],
         variants: [
             { key: '/stock/batches', label: 'stock.batches', columns: null },
             { key: '/stock/balances', label: 'stock.balances', columns: ['id', 'batch_id', 'batch_number', 'nomenclature', 'sku', 'warehouse', 'qty_on_hand', 'updated_at'], sortable: ['id', 'qty_on_hand', 'updated_at', 'batch_number'] }
@@ -524,9 +594,10 @@ const PAGES = {
     },
     plots: {
         endpoint: '/pasture-plots', perm: 'pasture:READ', eyebrow: ['Реестры', 'Registries'],
-        title: ['Пастбищные участки', 'Pasture plots'], kind: 'table',
+        title: ['Пастбищные участки', 'Pasture plots'], kind: 'table', statSection: 'pasture',
         columns: ['id', 'plot_no', 'name', 'area_ha', 'vegetation_type', 'max_head_per_ha', 'active_head_count', 'rest_days_required', 'is_active'],
         sortable: ['id', 'plot_no', 'name', 'area_ha', 'max_head_per_ha'],
+        filters: [fSearch('№ участка, название')],
         writePerm: 'pasture:WRITE', deletePerm: 'pasture:WRITE',
         crud: {
             createFields: [
@@ -544,11 +615,15 @@ const PAGES = {
     },
     tasks: {
         endpoint: '/tasks', perm: 'task:READ', eyebrow: ['Реестры', 'Registries'],
-        title: ['Задачи / наряды', 'Tasks'], kind: 'table',
+        title: ['Задачи / наряды', 'Tasks'], kind: 'table', statSection: 'tasks',
         columns: ['id', 'title', 'task_type', 'assignee', 'priority', 'status', 'planned_date', 'due_at'],
         sortable: ['id', 'planned_date', 'due_at', 'priority', 'status', 'created_at'],
-        statusValues: TASK_STATUSES, writePerm: 'task:WRITE', deletePerm: 'task:DELETE',
-        extraFilters: [{ name: 'assigned_to', type: 'number', ph: 'assigned_to' }],
+        filters: [
+            fSearch('Заголовок задачи'),
+            fSel('status', 'Статус', fPairs(TASK_STATUSES)),
+            { name: 'assigned_to', label: 'Исполнитель', type: 'select', optionsFrom: '/employees' }
+        ],
+        writePerm: 'task:WRITE', deletePerm: 'task:DELETE',
         crud: {
             createFields: [
                 F('task_type_id', 'select', { required: true, optionsFrom: '/task-types' }),
@@ -569,25 +644,43 @@ const PAGES = {
     },
     employees: {
         endpoint: '/employees', perm: 'employee:READ', eyebrow: ['Реестры', 'Registries'],
-        title: ['Сотрудники', 'Employees'], kind: 'table',
-        columns: ['id', 'full_name', 'position_id', 'phone', 'hire_date', 'is_active', 'is_deleted'],
-        sortable: ['id', 'full_name', 'hire_date', 'is_active'],
+        title: ['Сотрудники', 'Employees'], kind: 'table', statSection: 'employees',
+        columns: ['id', 'full_name', 'position_name', 'phone_mask', 'hire_date', 'is_active', 'assigned_count', 'has_pii', 'is_online'],
+        sortable: ['id', 'full_name', 'hire_date', 'is_active', 'assigned_count', 'position_name'],
+        filters: [
+            fSearch('ФИО сотрудника'),
+            { name: 'position_id', label: 'Должность', type: 'select', optionsFrom: '/positions' },
+            fSel('is_active', 'Работает', fPairs([['true', 'Да'], ['false', 'Уволен']])),
+            fSel('pii', 'ПДн', fPairs([['yes', 'Заполнены'], ['no', 'Не заполнены']])),
+            fSel('assigned', 'Закрепления', fPairs([['yes', 'Есть'], ['no', 'Нет']])),
+            fCheck('include_deleted', 'С удалёнными')
+        ],
         writePerm: 'employee:WRITE', deletePerm: 'employee:WRITE',
         crud: {
             createFields: [
                 F('full_name', 'text', { required: true }),
                 F('position_id', 'select', { required: true, optionsFrom: '/positions' }),
-                F('phone', 'text'), F('hire_date', 'date'), F('is_active', 'checkbox')
+                F('hire_date', 'date'),
+                F('phone', 'text', { hint: 'ПДн: шифруется на сервере' }),
+                F('passport', 'text'), F('address', 'text'), F('snils', 'text'),
+                F('inn', 'text'), F('bank_account', 'text'), F('emergency_contact', 'text')
             ],
-            editFields: [F('full_name', 'text'), F('position_id', 'select', { optionsFrom: '/positions' }), F('phone', 'text'), F('hire_date', 'date'), F('is_active', 'checkbox')]
-        }
+            editFields: [F('full_name', 'text'), F('position_id', 'select', { optionsFrom: '/positions' }), F('hire_date', 'date')]
+        },
+        rowActions: [
+            { key: 'pii', label: ['ПДн', 'PII'], perm: 'employee:PII', run: (row) => openEmployeePii(row) },
+            { key: 'assign', label: ['Закрепить', 'Assign'], perm: 'employee:WRITE', run: (row) => openEmployeeAssign(row) },
+            { key: 'dismiss', label: ['Уволить', 'Dismiss'], perm: 'employee:WRITE', run: (row) => openEmployeeDismiss(row) },
+            { key: 'reinstate', label: ['Восстановить', 'Reinstate'], perm: 'employee:WRITE', run: (row) => openEmployeeReinstate(row) }
+        ]
     },
 
     /* ---- Операции ---- */
     grazing: {
         endpoint: '/pasture-plots', perm: 'pasture:WRITE', eyebrow: ['Операции', 'Operations'],
-        title: ['Выпас', 'Grazing'], kind: 'grazing',
+        title: ['Выпас', 'Grazing'], kind: 'grazing', statSection: 'pasture',
         columns: ['plot_no', 'name', 'area_ha', 'group_name', 'head_count', 'days_on_plot', 'rest_status', 'load'],
+        filters: [fSearch('№ участка, название')],
         toolbar: [
             { key: 'move', label: ['Перевести группу', 'Move group'], hotkey: 'A', perm: 'pasture:WRITE', run: () => openMoveGroup() },
             { key: 'map', label: ['Карта', 'Map'], run: () => toggleMap(true) }
@@ -595,9 +688,10 @@ const PAGES = {
     },
     movements: {
         endpoint: '/stock/balances', perm: 'stock:WRITE', eyebrow: ['Операции', 'Operations'],
-        title: ['Движения склада', 'Stock movements'], kind: 'table',
+        title: ['Движения склада', 'Stock movements'], kind: 'table', statSection: 'stock',
         columns: ['id', 'batch_id', 'batch_number', 'nomenclature', 'sku', 'warehouse', 'qty_on_hand', 'updated_at'],
         sortable: ['id', 'qty_on_hand', 'updated_at', 'batch_number'],
+        filters: [fSearch('Партия, номенклатура, SKU')],
         toolbar: [
             { key: 'receipt', label: ['Приход (I)', 'Receipt (I)'], hotkey: 'I', perm: 'stock:WRITE', run: () => openMovement('RECEIPT') },
             { key: 'issue', label: ['Расход (O)', 'Issue (O)'], hotkey: 'O', perm: 'stock:WRITE', run: () => openMovement('ISSUE') },
@@ -609,11 +703,19 @@ const PAGES = {
     /* ---- Администрирование ---- */
     'admin-users': {
         endpoint: '/admin/users', perm: 'user:READ', eyebrow: ['Администрирование', 'Administration'],
-        title: ['Пользователи', 'Users'], kind: 'table',
-        columns: ['id', 'login', 'full_name', 'role_code', 'employee_name', 'is_active', 'must_change_pw', 'failed_cnt', 'last_login_at'],
+        title: ['Пользователи', 'Users'], kind: 'table', statSection: 'users',
+        columns: ['id', 'login', 'full_name', 'role_code', 'employee_name', 'is_active', 'is_online', 'failed_cnt', 'must_change_pw', 'sessions_count', 'last_login_at', 'blocked_reason'],
         sortable: ['id', 'login', 'full_name', 'last_login_at', 'is_active'],
+        filters: [
+            fSearch('Логин, ФИО, сотрудник'),
+            { name: 'role_id', label: 'Роль', type: 'select', optionsFrom: '/admin/roles' },
+            fSel('state', 'Состояние', fPairs([
+                ['active', 'Активные'], ['blocked', 'Заблокированы'], ['locked', 'Временная блокировка'],
+                ['online', 'Онлайн'], ['no_password_change', 'Не сменили пароль']
+            ])),
+            fCheck('include_deleted', 'С удалёнными')
+        ],
         writePerm: 'user:WRITE', deletePerm: 'user:WRITE',
-        extraFilters: [{ name: 'role_id', type: 'number', ph: 'role_id' }],
         crud: {
             createFields: [
                 F('login', 'text', { required: true }),
@@ -630,26 +732,42 @@ const PAGES = {
             ]
         },
         rowActions: [
-            { key: 'unlock', label: ['Разблокировать', 'Unlock'], perm: 'user:WRITE', run: (row) => customAction('POST', `/admin/users/${row.id}/unlock`, {}, 'done') },
-            { key: 'reset', label: ['Сброс пароля', 'Reset password'], perm: 'user:WRITE', run: (row) => openResetPassword(row) }
+            { key: 'block', label: ['Блокировать', 'Block'], perm: 'user:WRITE', run: (row) => openUserBlock(row) },
+            { key: 'unblock', label: ['Разблокировать', 'Unblock'], perm: 'user:WRITE', run: (row) => openUserUnblock(row) },
+            { key: 'genpw', label: ['Новый пароль', 'New password'], perm: 'user:WRITE', run: (row) => generateUserPassword(row) },
+            { key: 'sessions', label: ['Сессии', 'Sessions'], perm: 'user:READ', run: (row) => openUserSessions(row) }
         ]
     },
     roles: {
         endpoint: '/admin/roles', perm: 'user:READ', eyebrow: ['Администрирование', 'Administration'],
-        title: ['Роли и права', 'Roles & permissions'], kind: 'table',
+        title: ['Роли и права', 'Roles & permissions'], kind: 'table', statSection: 'users',
         columns: [], variants: [
             { key: '/admin/roles', label: ['Роли', 'Roles'], columns: null },
             { key: '/admin/permissions', label: ['Права', 'Permissions'], columns: ['id', 'code', 'object_name', 'action', 'description'] }
-        ]
+        ],
+        filters: [fSearch('Код или название роли')],
+        rowActions: [{ key: 'perms', label: ['Права роли', 'Permissions'], perm: 'user:WRITE', run: (row) => openRolePermissions(row) }]
     },
     'audit-log': {
         endpoint: '/admin/audit-log', perm: 'audit:READ', eyebrow: ['Администрирование', 'Administration'],
-        title: ['Журнал аудита', 'Audit log'], kind: 'table',
+        title: ['Журнал аудита', 'Audit log'], kind: 'table', statSection: 'audit',
         columns: ['id', 'occurred_at', 'login', 'role_code', 'entity_name', 'entity_id', 'action', 'ip', 'is_elevated', 'override_reason'],
-        statusValues: AUDIT_ACTIONS, statusKey: 'action', csvPath: '/admin/audit-log/export',
-        extraFilters: [
-            { name: 'entity_name', type: 'text', ph: 'entity_name' },
-            { name: 'is_elevated', type: 'bool' }
+        sortable: [],
+        csvPath: '/admin/audit-log/export',
+        filters: [
+            fSearch('Логин, сущность, причина'),
+            { name: 'user_id', label: 'Пользователь', type: 'select', optionsFrom: '/admin/audit-log/users' },
+            fSel('action', 'Действие', fPairs(AUDIT_ACTIONS)),
+            fSel('category', 'Отбор', fPairs([
+                ['violations', 'Только нарушения (DENY)'],
+                ['pii', 'Просмотр ПДн'],
+                ['changes', 'Изменения данных'],
+                ['auth', 'Входы в систему'],
+                ['exports', 'Экспорт']
+            ])),
+            fDate('from', 'С', 'date_from'),
+            fDate('to', 'По', 'date_to'),
+            fCheck('is_elevated', 'Только тех. действия')
         ]
     },
     settings: {
@@ -663,67 +781,104 @@ const PAGES = {
     /* ---- Аналитика ---- */
     dashboard: {
         endpoint: '/reports/dashboard', perm: 'report:READ', eyebrow: ['Аналитика', 'Analytics'],
-        title: ['Дашборд', 'Dashboard'], kind: 'dashboard'
+        title: ['Дашборд', 'Dashboard'], kind: 'dashboard', statSection: 'main',
+        filters: [fDate('from', 'С'), fDate('to', 'По')]
     },
     'cost-fcr': {
         endpoint: '/reports/cost-fcr', perm: 'report:READ', eyebrow: ['Аналитика', 'Analytics'],
         title: ['Себестоимость и FCR', 'Cost & FCR'], kind: 'report',
-        columns: ['group_id', 'group_name', 'period_month', 'feed_qty', 'feed_cost', 'treatment_cost', 'head_days', 'gain_kg', 'fcr']
+        columns: ['group_id', 'group_name', 'period_month', 'feed_qty', 'feed_cost', 'treatment_cost', 'head_days', 'gain_kg', 'fcr'],
+        filters: [fDate('from', 'С'), fDate('to', 'По')]
     },
     'herd-health': {
         endpoint: '/reports/herd-health', perm: 'report:READ', eyebrow: ['Аналитика', 'Analytics'],
-        title: ['Здоровье поголовья', 'Herd health'], kind: 'report',
-        columns: ['metric', 'status', 'count', 'total_animals', 'sick_or_quarantine', 'sick_share_pct', 'healthy', 'culled', 'dead', 'vaccination_overdue', 'animals_vaccination_overdue']
+        title: ['Здоровье поголовья', 'Herd health'], kind: 'report', statSection: 'animals',
+        columns: ['metric', 'status', 'count', 'total_animals', 'sick_or_quarantine', 'sick_share_pct', 'healthy', 'culled', 'dead', 'vaccination_overdue', 'animals_vaccination_overdue'],
+        filters: [fDate('from', 'С'), fDate('to', 'По')]
     },
     'pasture-load': {
         endpoint: '/reports/pasture-load', perm: 'report:READ', eyebrow: ['Аналитика', 'Analytics'],
-        title: ['Нагрузка на пастбища', 'Pasture load'], kind: 'report',
-        columns: ['plot_no', 'name', 'area_ha', 'active_heads', 'load_head_per_ha', 'norm_head_per_ha', 'over_limit', 'rest_ok', 'risk', 'grazing_events', 'last_grazing_end']
+        title: ['Нагрузка на пастбища', 'Pasture load'], kind: 'report', statSection: 'pasture',
+        columns: ['plot_no', 'name', 'area_ha', 'active_heads', 'load_head_per_ha', 'norm_head_per_ha', 'over_limit', 'rest_ok', 'risk', 'grazing_events', 'last_grazing_end'],
+        filters: [fSearch('№ участка, название')]
     },
     'tasks-in-work': {
         endpoint: '/reports/tasks-in-work', perm: 'report:READ', eyebrow: ['Аналитика', 'Analytics'],
-        title: ['Задачи в работе', 'Tasks in work'], kind: 'report',
-        columns: ['id', 'title', 'status', 'priority', 'planned_date', 'due_at', 'task_type', 'assignee', 'is_overdue', 'groups_count', 'executions_count']
+        title: ['Задачи в работе', 'Tasks in work'], kind: 'report', statSection: 'tasks',
+        columns: ['id', 'title', 'status', 'priority', 'planned_date', 'due_at', 'task_type', 'assignee', 'is_overdue', 'groups_count', 'executions_count'],
+        filters: [fDate('from', 'С'), fDate('to', 'По')]
     },
     'stock-turnover': {
         endpoint: '/reports/stock-turnover', perm: 'report:READ', eyebrow: ['Аналитика', 'Analytics'],
-        title: ['Остатки и обороты склада', 'Stock turnover'], kind: 'report',
-        columns: ['nomenclature_id', 'sku', 'name', 'category', 'uom', 'on_hand', 'min_threshold', 'received', 'issued', 'batches', 'turnover', 'risk', 'nearest_expiry']
+        title: ['Остатки и обороты склада', 'Stock turnover'], kind: 'report', statSection: 'stock',
+        columns: ['nomenclature_id', 'sku', 'name', 'category', 'uom', 'on_hand', 'min_threshold', 'received', 'issued', 'batches', 'turnover', 'risk', 'nearest_expiry'],
+        filters: [fDate('from', 'С'), fDate('to', 'По')]
     },
 
     /* ---- Технадминка ---- */
-    'tech-backups': {
-        endpoint: '/tech/backups', perm: 'backup:READ', eyebrow: ['Технадминка', 'Tech admin'],
-        title: ['Резервные копии', 'Backups'], kind: 'table',
-        columns: ['id', 'backup_type', 'status', 'started_at', 'finished_at', 'size_bytes', 'checksum', 'retention_days', 'initiated_by_login'],
-        statusValues: BACKUP_STATUSES, statusKey: 'status',
-        extraFilters: [{ name: 'backup_type', type: 'text', ph: 'FULL / INCREMENTAL' }],
-        toolbar: [
-            { key: 'backup', label: ['Создать копию', 'Create backup'], perm: 'backup:EXEC', run: () => openBackup() },
-            { key: 'restore', label: ['Восстановить', 'Restore'], perm: 'backup:EXEC', run: () => openRestore() }
-        ]
-    },
-    restores: {
-        endpoint: '/tech/restores', perm: 'backup:READ', eyebrow: ['Технадминка', 'Tech admin'],
-        title: ['Восстановления', 'Restores'], kind: 'table',
-        columns: ['id', 'backup_job_id', 'file_path', 'status', 'started_at', 'finished_at', 'reason', 'performed_by_login'],
-        toolbar: [{ key: 'restore', label: ['Восстановить', 'Restore'], perm: 'backup:EXEC', run: () => openRestore() }]
+    backups: {
+        endpoint: '/tech/backups/overview', perm: 'backup:READ', eyebrow: ['Технадминка', 'Tech admin'],
+        title: ['Резервные копии', 'Backups'], kind: 'backups', statSection: 'backups',
+        noFilters: true, noPager: true
     },
     'tech-log': {
         endpoint: '/tech/log', perm: 'tech:READ', eyebrow: ['Технадминка', 'Tech admin'],
         title: ['Технический лог', 'Tech log'], kind: 'table',
         columns: ['id', 'occurred_at', 'action_type', 'description', 'details', 'admin_login'],
-        extraFilters: [{ name: 'action_type', type: 'text', ph: 'BACKUP / RESTORE / …' }],
+        filters: [
+            fSel('action_type', 'Тип события', fPairs(['BACKUP', 'RESTORE', 'MAINTENANCE', 'INDEX', 'MIGRATION'])),
+            fSearch('Описание')
+        ],
         toolbar: [{ key: 'maintenance', label: ['Обслуживание БД', 'DB maintenance'], perm: 'tech:EXEC', run: () => openMaintenance() }]
     },
-    'tech-metrics': {
-        endpoint: '/tech/metrics', perm: 'tech:READ', eyebrow: ['Технадминка', 'Tech admin'],
-        title: ['Метрики БД', 'DB metrics'], kind: 'metrics'
+    metrics: {
+        endpoint: '/tech/metrics/perf', perm: 'tech:READ', eyebrow: ['Технадминка', 'Tech admin'],
+        title: ['Скорость запросов к БД', 'DB query speed'], kind: 'metrics-perf',
+        noFilters: true, noPager: true
+    },
+
+    /* ---- Администратор БД (миграции / мониторинг / копии) ---- */
+    'dba-migrations': {
+        endpoint: '/dba/migrations', perm: 'dba:READ', rowsFrom: 'files', noFilters: true,
+        eyebrow: ['Администратор БД', 'DB administrator'],
+        title: ['Миграции схемы', 'Schema migrations'], kind: 'table',
+        columns: ['version', 'filename', 'state', 'checksum', 'appliedAt', 'durationMs', 'errorMessage'],
+        toolbar: [
+            { key: 'preflight', label: ['Проверить (dry-run)', 'Preflight (dry-run)'], perm: 'dba:EXEC', run: () => dbaAction('preflight') },
+            { key: 'apply', label: ['Применить', 'Apply migrations'], perm: 'dba:EXEC', run: () => dbaAction('apply') },
+            { key: 'history', label: ['Реестр версий', 'Version registry'], perm: 'dba:READ', run: () => navigate('dba-history') }
+        ]
+    },
+    'dba-history': {
+        endpoint: '/dba/migrations/history', perm: 'dba:READ', noFilters: true,
+        eyebrow: ['Администратор БД', 'DB administrator'],
+        title: ['Реестр миграций', 'Migration registry'], kind: 'table',
+        columns: ['version', 'filename', 'status', 'checksum', 'applied_by_login', 'started_at', 'finished_at', 'duration_ms', 'error_message']
+    },
+    'dba-monitor': {
+        endpoint: '/dba/monitor/health', perm: 'dba:READ', noFilters: true,
+        eyebrow: ['Администратор БД', 'DB administrator'],
+        title: ['Мониторинг БД', 'DB monitoring'], kind: 'dba-monitor',
+        toolbar: [
+            { key: 'capture', label: ['Снять снимок', 'Capture snapshot'], perm: 'dba:EXEC', run: () => dbaAction('capture') },
+            { key: 'analyze', label: ['ANALYZE', 'ANALYZE'], perm: 'dba:EXEC', run: () => dbaAction('refresh') }
+        ]
+    },
+    'dba-backups': {
+        endpoint: '/dba/backups/files', perm: 'dba:READ', rowsFrom: 'files', noFilters: true,
+        eyebrow: ['Администратор БД', 'DB administrator'],
+        title: ['Копии на диске', 'Backup files'], kind: 'table',
+        columns: ['file', 'type', 'size_bytes', 'created_at', 'age_days', 'expires_in_days', 'will_expire', 'has_checksum', 'checksum'],
+        toolbar: [
+            { key: 'backup', label: ['Создать копию', 'Create backup'], perm: 'dba:EXEC', run: () => dbaAction('backup') },
+            { key: 'rotate', label: ['Ротация (30 дн.)', 'Rotate (30 days)'], perm: 'dba:EXEC', run: () => dbaAction('rotate') }
+        ]
     }
 };
 
 /* Псевдонимы хешей: и канонические имена ТЗ, и реальные href из index.html. */
 const ALIASES = {
+    home: 'home', main: 'home', index: 'home',
     animals: 'animals', groups: 'groups', inspections: 'inspections', vaccinations: 'vaccinations',
     stock: 'stock', plots: 'plots', tasks: 'tasks', employees: 'employees',
     grazing: 'grazing', movements: 'movements',
@@ -733,14 +888,19 @@ const ALIASES = {
     'admin-users': 'admin-users', users: 'admin-users',
     'audit-log': 'audit-log', audit: 'audit-log',
     settings: 'settings',
-    'tech-backups': 'tech-backups', backups: 'tech-backups',
-    'tech-log': 'tech-log', 'tech-metrics': 'tech-metrics', metrics: 'tech-metrics',
-    roles: 'roles', restores: 'restores'
+    backups: 'backups', 'tech-backups': 'backups', restores: 'backups',
+    'tech-log': 'tech-log', metrics: 'metrics', 'tech-metrics': 'metrics',
+    roles: 'roles',
+    'dba-migrations': 'dba-migrations', 'dba-history': 'dba-history',
+    'dba-monitor': 'dba-monitor', 'dba-backups': 'dba-backups'
 };
 const HASH_FOR = {
-    'admin-users': '#/users', 'audit-log': '#/audit', 'tech-backups': '#/backups',
-    'tech-metrics': '#/metrics', 'tech-log': '#/tech-log', settings: '#/settings',
-    roles: '#/roles', restores: '#/restores'
+    home: '#/home',
+    'admin-users': '#/users', 'audit-log': '#/audit', backups: '#/backups',
+    metrics: '#/metrics', 'tech-log': '#/tech-log', settings: '#/settings',
+    roles: '#/roles',
+    'dba-migrations': '#/dba-migrations', 'dba-history': '#/dba-history',
+    'dba-monitor': '#/dba-monitor', 'dba-backups': '#/dba-backups'
 };
 
 function pageIdFromHash() {
@@ -882,7 +1042,7 @@ async function loadOptions(path) {
     return rows.map((r) => {
         const id = r.id !== undefined ? r.id : (r.setting_key || r.code || r.nomenclature_id);
         let text = '';
-        for (const k of ['name', 'plot_no', 'batch_number', 'full_name', 'login', 'title', 'sku', 'setting_key', 'code']) {
+        for (const k of ['name', 'plot_no', 'inventory_number', 'batch_number', 'full_name', 'login', 'title', 'sku', 'setting_key', 'code']) {
             if (r[k] !== undefined && r[k] !== null && String(r[k]).trim()) { text = String(r[k]); break; }
         }
         if (!text) text = '#' + String(id);
@@ -1125,20 +1285,414 @@ function promptOverrideReason(message) {
     });
 }
 
+/* --------------------------------------------------------------------------
+ * 6b. Универсальная палитра действий, роль-зависимые подсказки и справка
+ * -------------------------------------------------------------------------- */
+function tr(v) { return Array.isArray(v) ? (state.lang === 'en' ? v[1] : v[0]) : String(v || ''); }
+
+function roleTitle() {
+    const r = (state.user && state.user.role) || {};
+    return r.name || r.code || '—';
+}
+
+/** Что именно создаёт N на текущем экране (или null, если создать нельзя). */
+function currentCreateAction(page) {
+    page = page || currentPage();
+    if (!page) return null;
+    if (page.crud && page.crud.createFields && page.crud.createFields.length && hasPerm(page.writePerm)) {
+        return { id: 'create-current', title: 'Создать: ' + tr(page.title), short: tr(page.title),
+            hint: 'Откроется форма новой записи раздела «' + tr(page.title) + '».', run: () => openCreate() };
+    }
+    const primary = (page.toolbar || []).find((x) => ['receipt', 'backup', 'move', 'assign'].includes(x.key) && hasPerm(x.perm));
+    if (primary) {
+        return { id: 'toolbar-' + primary.key, title: tr(primary.label), short: tr(primary.label),
+            hint: 'Создание операции раздела «' + tr(page.title) + '».', run: primary.run };
+    }
+    return null;
+}
+
+/** Понятное объяснение отказа вместо голого «403». */
+function denied(perm, what) {
+    toast((what || 'Действие') + ' недоступно: нужное право ' + perm
+        + ' отсутствует у роли «' + roleTitle() + '».', 'warn');
+}
+
+const PICKERS = {
+    user: {
+        endpoint: '/admin/users', perm: 'user:READ', label: 'Пользователь',
+        text: (r) => `${r.login || ''} · ${r.full_name || ''} · ${r.role_code || ''}`
+    },
+    employee: {
+        endpoint: '/employees', perm: 'employee:READ', label: 'Сотрудник',
+        text: (r) => `${r.full_name || ''} · ${r.position_name || ''}`
+    },
+    animal: {
+        endpoint: '/animals', perm: 'animal:READ', label: 'Животное',
+        text: (r) => `${r.inventory_number || ''} · ${r.group_name || ''} · ${r.status || ''}`
+    },
+    backup: {
+        endpoint: '/tech/backups', perm: 'backup:READ', label: 'Резервная копия',
+        text: (r) => `#${r.id} · ${r.backup_type || ''} · ${r.status || ''}`
+    }
+};
+
+/** Все доступные роли действия: палитра и справка строятся из одного источника. */
+function buildActions() {
+    const out = [];
+    const page = currentPage();
+    const add = (a) => { if (!a.perm || hasPerm(a.perm)) out.push(a); };
+    const shown = new Set();
+    const addOnce = (a) => { if (shown.has(a.id)) return; shown.add(a.id); add(a); };
+
+    const create = currentCreateAction(page);
+    if (create) addOnce(Object.assign({ group: 'На этой странице', kind: 'СОЗДАТЬ' }, create));
+
+    for (const t of ((page && page.toolbar) || [])) {
+        addOnce({ id: 'toolbar-' + t.key, group: 'На этой странице', kind: 'ОПЕРАЦИЯ',
+            title: tr(t.label), hint: 'Действие раздела «' + tr(page.title) + '».', perm: t.perm, run: t.run });
+    }
+    if (state.selectedRow && page && page.rowActions) {
+        for (const a of page.rowActions) {
+            if (!hasPerm(a.perm)) continue;
+            addOnce({ id: 'row-' + a.key, group: 'Выбранная запись', kind: 'ЗАПИСЬ',
+                title: tr(a.label), hint: 'Применить к строке, выбранной в таблице.', run: () => a.run(state.selectedRow) });
+        }
+    }
+
+    /* Создание в любом доступном разделе — не только в открытом. */
+    for (const [id, p] of Object.entries(PAGES)) {
+        if (!p.crud || !p.crud.createFields || !p.crud.createFields.length) continue;
+        if (id === state.page || !p.perm || !hasPerm(p.perm) || !hasPerm(p.writePerm)) continue;
+        addOnce({ id: 'create-' + id, group: 'Создать в другом разделе', kind: 'СОЗДАТЬ',
+            title: 'Создать: ' + tr(p.title), hint: 'Перейти в раздел и открыть форму создания.',
+            run: () => goCreate(id) });
+    }
+
+    /* Операции всех доступных разделов: палитра одинаково полезна из любого экрана. */
+    for (const [id, p] of Object.entries(PAGES)) {
+        if (id === state.page || !p.perm || !hasPerm(p.perm)) continue;
+        for (const t of (p.toolbar || [])) {
+            if (!hasPerm(t.perm)) continue;
+            addOnce({ id: 'op-' + id + '-' + t.key, group: 'Операции разделов', kind: 'ОПЕРАЦИЯ',
+                title: tr(t.label) + ' · ' + tr(p.title),
+                hint: 'Перейти в раздел «' + tr(p.title) + '» и выполнить операцию.',
+                run: () => goAction(id, t.run) });
+        }
+    }
+
+    if (hasPerm('user:READ')) {
+        for (const [id, title, hint] of [
+            ['admin-users', 'Пользователи', 'Аккаунты, роли, блокировки и сессии'],
+            ['roles', 'Роли и права', 'Матрица разрешений ролей'],
+            ['audit-log', 'Журнал аудита', 'События, отказы DENY, просмотр ПДн']
+        ]) {
+            addOnce({ id: 'go-' + id, group: 'Перейти', kind: 'РАЗДЕЛ', title, hint, run: () => navigate(id) });
+        }
+    }
+    if (hasPerm('user:WRITE')) {
+        for (const [id, title, hint, run] of [
+            ['user-block', 'Заблокировать пользователя', 'Причина обязательна, сессии отзываются', openUserBlock],
+            ['user-unblock', 'Разблокировать пользователя', 'Причина обязательна и попадает в аудит', openUserUnblock],
+            ['user-password', 'Сгенерировать пароль', 'Временный пароль показывается один раз', generateUserPassword],
+            ['user-sessions', 'Посмотреть сессии', 'Активные сессии и отзыв всех сессий', openUserSessions],
+            ['user-edit', 'Изменить пользователя', 'ФИО, роль, employee_id, флаги учётной записи',
+                (row) => openEdit(row, PAGES['admin-users'])]
+        ]) {
+            addOnce({ id, group: 'Пользователи', kind: 'АККАУНТ', title, hint,
+                needs: 'user', perm: 'user:WRITE', run });
+        }
+    }
+    if (hasPerm('employee:PII')) {
+        addOnce({ id: 'emp-pii', group: 'Сотрудники', kind: 'ПДн', title: 'Просмотр ПДн сотрудника',
+            hint: 'Расшифровка по праву employee:PII, чтение пишется в аудит READ_PII',
+            needs: 'employee', perm: 'employee:PII', run: openEmployeePii });
+    }
+    if (hasPerm('employee:WRITE')) {
+        for (const [id, title, hint, run] of [
+            ['emp-dismiss', 'Уволить сотрудника', 'Закроет закрепления и заблокирует учётные записи', openEmployeeDismiss],
+            ['emp-reinstate', 'Восстановить сотрудника', 'Вернёт сотрудника в активное состояние', openEmployeeReinstate],
+            ['emp-assign', 'Закрепить животное за сотрудником', 'Роль закрепления: VET / HERDSMAN / FOREMAN / ZOOTECHNIK', openEmployeeAssign]
+        ]) {
+            addOnce({ id, group: 'Сотрудники', kind: 'СОТРУДНИК', title, hint,
+                needs: 'employee', perm: 'employee:WRITE', run });
+        }
+    }
+    if (hasPerm('animal:WRITE')) {
+        for (const [id, title, hint, run] of [
+            ['animal-status', 'Сменить статус животного', 'Включая НА_ПРОДАЖЕ / ПРОДАН с причиной выбытия', openAnimalStatus],
+            ['animal-assign', 'Закрепить сотрудника за животным', 'Добавляет закрепление с заданной ролью', openAnimalAssign]
+        ]) {
+            addOnce({ id, group: 'Животные', kind: 'ЖИВОТНОЕ', title, hint,
+                needs: 'animal', perm: 'animal:WRITE', run });
+        }
+    }
+    if (hasPerm('backup:EXEC')) {
+        addOnce({ id: 'backup-create', group: 'Техника', kind: 'КОПИЯ', title: 'Создать резервную копию',
+            hint: 'Реальный pg_dump, результат виден на странице копий.', run: () => openBackup() });
+        addOnce({ id: 'backup-restore', group: 'Техника', kind: 'КОПИЯ', title: 'Восстановить из копии',
+            hint: 'Разрушающая операция: обязательны право backup:EXEC и причина.',
+            needs: 'backup', perm: 'backup:EXEC', run: (row) => openRestore(row.id) });
+    }
+    if (hasPerm('tech:EXEC')) {
+        addOnce({ id: 'perf-reset', group: 'Техника', kind: 'МЕТРИКИ', title: 'Сбросить метрики скорости',
+            hint: 'Очистить накопленное окно замеров запросов к БД.',
+            run: async () => { try { await api('POST', '/tech/metrics/perf/reset', {}, { silent: true }); toast(t('done'), 'ok'); if (state.page === 'metrics') loadPage(); } catch (err) { toast(err.message, 'err'); } } });
+    }
+    return out;
+}
+
+/** Подсказки зависят от роли и текущего раздела. */
+function hotkeyRows() {
+    const rows = [
+        ['?', t('help.hotkeys') + ' по роли «' + roleTitle() + '»'],
+        ['Ctrl K', t('actions.palette') + ' — все доступные операции'],
+        ['/', t('hk.focus')], ['R', t('hk.refresh')], ['Esc', t('hk.close')]
+    ];
+    const create = currentCreateAction();
+    if (create) rows.splice(2, 0, ['N', create.title]);
+    else {
+        const firstCreate = buildActions().find((a) => a.kind === 'СОЗДАТЬ');
+        rows.splice(2, 0, ['N', firstCreate
+            ? 'Палитра действий · ' + firstCreate.title
+            : 'Палитра действий (создание недоступно для вашей роли)']);
+    }
+    if (state.selectedRow) rows.push(['E', 'Изменить выбранную запись']);
+    if (hasPerm('user:WRITE')) rows.push(['B', 'Заблокировать пользователя (поиск по логину)']);
+    if (hasPerm('stock:WRITE')) rows.push(['I / O / W', 'Приход / расход / списание склада']);
+    if (hasPerm('animal:WRITE') || hasPerm('pasture:WRITE')) rows.push(['A', 'Закрепление / перевод группы']);
+    if (hasPerm('task:WRITE')) rows.push(['D', 'Выполнить задачу']);
+    rows.push(['G …', 'Быстрый переход: A животные · S склад · D дашборд']);
+    return rows;
+}
+
+function renderHotkeyHint() {
+    const box = $('hotkeys-hint');
+    if (!box) return;
+    clear(box);
+    for (const [key, text] of hotkeyRows().slice(0, 5)) {
+        box.appendChild(el('kbd', { text: key }));
+        box.appendChild(document.createTextNode(' ' + text + '  '));
+    }
+}
+
+/* ---- Палитра действий ---- */
+function closeActionDialog() { const d = $('action-dialog'); if (d && d.open) d.close(); }
+
+function openActionPalette(presetId) {
+    if (!state.token) return;
+    const d = $('action-dialog');
+    if (!d) return;
+    state.actionItems = buildActions();
+    state.actionIndex = 0;
+    state.actionCurrent = null;
+    $('action-title').textContent = t('actions.palette') + ' · ' + roleTitle();
+    $('action-context').textContent = t('action.context');
+    $('action-search').placeholder = t('action.search');
+    $('action-search-label').textContent = t('action.search');
+    $('action-search').value = presetId || '';
+    $('action-step-list').hidden = false;
+    $('action-step-picker').hidden = true;
+    renderActionList(presetId || '');
+    if (!d.open) d.showModal();
+    $('action-search').focus();
+}
+
+function renderActionList(query) {
+    const box = $('action-list');
+    clear(box);
+    const q = String(query || '').trim().toLowerCase();
+    const items = state.actionItems.filter((a) =>
+        !q || (a.title + ' ' + a.hint + ' ' + a.group + ' ' + a.kind).toLowerCase().includes(q));
+    state.actionVisible = items;
+    state.actionIndex = 0;
+    if (!items.length) {
+        box.appendChild(el('p', { class: 'action-empty', text: t('action.empty') }));
+        return;
+    }
+    let group = '';
+    for (const a of items) {
+        if (a.group !== group) {
+            group = a.group;
+            box.appendChild(el('div', { class: 'action-group', text: group }));
+        }
+        const btn = el('button', {
+            class: 'action-item', type: 'button', role: 'option', dataset: { action: a.id },
+            on: { click: () => runAction(a) }
+        }, [
+            el('span', { class: 'action-kind', text: a.kind }),
+            el('span', { class: 'action-text' }, [
+                el('span', { class: 'action-title', text: a.title }),
+                el('span', { class: 'action-hint', text: a.hint })
+            ])
+        ]);
+        box.appendChild(btn);
+    }
+    markAction(0);
+}
+
+function markAction(index) {
+    const items = [...$('action-list').querySelectorAll('.action-item')];
+    if (!items.length) return;
+    state.actionIndex = (index + items.length) % items.length;
+    items.forEach((n, i) => n.classList.toggle('is-active', i === state.actionIndex));
+    items[state.actionIndex].scrollIntoView({ block: 'nearest' });
+}
+
+function runAction(action) {
+    closeActionDialog();
+    if (action.needs) { openEntityPicker(action); return; }
+    try { action.run(); } catch (err) { toast(err.message || t('err.generic'), 'err'); }
+}
+
+/* ---- Выбор записи: пользователь, сотрудник, животное, копия ---- */
+async function openEntityPicker(action) {
+    const cfg = PICKERS[action.needs];
+    if (!cfg) { action.run(null); return; }
+    if (!hasPerm(cfg.perm)) { denied(cfg.perm, 'Выбор записи'); return; }
+    state.actionCurrent = action;
+    $('action-step-list').hidden = true;
+    $('action-step-picker').hidden = false;
+    $('action-picker-title').textContent = action.title + ' · ' + t('action.pick');
+    $('action-entity-search').placeholder = t('action.entity');
+    $('action-entity-search').value = '';
+    try {
+        if (!state.pickerCache) state.pickerCache = {};
+        if (!state.pickerCache[action.needs]) {
+            const res = await api('GET', cfg.endpoint, undefined, { query: { limit: MAX_LIMIT }, silent: true });
+            state.pickerCache[action.needs] = Array.isArray(res && res.data) ? res.data : (Array.isArray(res) ? res : []);
+        }
+        renderEntityList('');
+    } catch (err) { toast(err.message, 'err'); }
+    const d = $('action-dialog');
+    if (!d.open) d.showModal();
+    $('action-entity-search').focus();
+}
+
+function renderEntityList(query) {
+    const action = state.actionCurrent;
+    const cfg = action && PICKERS[action.needs];
+    const box = $('action-entity-list');
+    clear(box);
+    if (!cfg) return;
+    const rows = state.pickerCache[action.needs] || [];
+    const q = String(query || '').trim().toLowerCase();
+    const found = rows.filter((r) => cfg.text(r).toLowerCase().includes(q)).slice(0, 40);
+    state.entityVisible = found;
+    state.entityIndex = 0;
+    if (!found.length) {
+        box.appendChild(el('p', { class: 'action-empty', text: t('action.empty') }));
+        return;
+    }
+    found.forEach((row, i) => {
+        box.appendChild(el('button', {
+            class: 'action-item entity-item', type: 'button', role: 'option',
+            on: { click: () => { closeActionDialog(); try { action.run(row); } catch (err) { toast(err.message, 'err'); } } }
+        }, [
+            el('span', { class: 'action-kind', text: '#' + (i + 1) }),
+            el('span', { class: 'action-text' }, [
+                el('span', { class: 'action-title', text: cfg.text(row) }),
+                el('span', { class: 'action-hint', text: cfg.label })
+            ])
+        ]));
+    });
+    markEntity(0);
+}
+
+function markEntity(index) {
+    const items = [...$('action-entity-list').querySelectorAll('.entity-item')];
+    if (!items.length) return;
+    state.entityIndex = (index + items.length) % items.length;
+    items.forEach((n, i) => n.classList.toggle('is-active', i === state.entityIndex));
+    items[state.entityIndex].scrollIntoView({ block: 'nearest' });
+}
+
+function backToActions() {
+    state.actionCurrent = null;
+    $('action-step-picker').hidden = true;
+    $('action-step-list').hidden = false;
+    $('action-search').focus();
+}
+
+/* ---- Умные hotkey-действия ---- */
+function openCreateSmart() {
+    const create = currentCreateAction();
+    if (create) { create.run(); return; }
+    openActionPalette('Создать');
+}
+
+function openEditSmart() {
+    const page = currentPage();
+    if (state.selectedRow && page && page.crud && page.crud.editFields && hasPerm(page.writePerm)) {
+        openEdit(state.selectedRow); return;
+    }
+    if (state.page === 'admin-users' && state.selectedRow) { openEdit(state.selectedRow); return; }
+    openActionPalette('Изменить');
+}
+
+function openBlockSmart() {
+    if (!hasPerm('user:WRITE')) { denied('user:WRITE', 'Блокировка пользователя'); return; }
+    const palette = buildActions().find((a) => a.id === 'user-block');
+    if (palette) { state.actionItems = [palette]; openEntityPicker(palette); }
+}
+
+/** Перейти в раздел и сразу открыть там форму создания. */
+function goCreate(pageId) {
+    navigate(pageId);
+    const tryOpen = (attempts) => {
+        if (state.page === pageId && currentCreateAction()) { openCreate(); return; }
+        if (attempts > 0) setTimeout(() => tryOpen(attempts - 1), 120);
+    };
+    setTimeout(() => tryOpen(12), 60);
+}
+
+/** Перейти в раздел и выполнить там кнопку тулбара (палитра действий). */
+function goAction(pageId, run) {
+    if (typeof run !== 'function') return;
+    navigate(pageId);
+    const attempt = (left) => {
+        if (state.page === pageId) { run(); return; }
+        if (left > 0) setTimeout(() => attempt(left - 1), 120);
+    };
+    setTimeout(() => attempt(12), 60);
+}
+
 function renderHelp() {
     const dlg = $('help-dialog');
-    const heads = dlg.querySelectorAll('.help-body h3');
-    if (heads[0]) heads[0].textContent = t('help.hotkeys');
-    if (heads[1]) heads[1].textContent = t('help.data');
-    if (heads[2]) heads[2].textContent = t('help.roles');
-    $('help-title').textContent = t('help.title');
+    $('help-title').textContent = t('help.title') + ' · ' + roleTitle();
     $('help-ok').textContent = t('help.ok');
-    const dl = dlg.querySelector('.help-keys');
-    clear(dl);
-    for (const [keys, textKey] of HOTKEYS) {
-        dl.appendChild(el('dt', {}, [el('kbd', { text: keys })]));
-        dl.appendChild(el('dd', { text: t(textKey) }));
+    $('help-role').textContent = t('help.role') + ': ' + roleTitle();
+    const notes = [];
+    if (isTechnical()) notes.push('Технические роли при записи обязаны указать X-Override-Reason (только ASCII).');
+    else {
+        if (!hasPerm('tech:READ')) notes.push('Технический контур (бэкапы, метрики, обслуживание) недоступен.');
+        if (!hasPerm('user:READ')) notes.push('Управление пользователями недоступно.');
+        if (!hasPerm('animal:WRITE')) notes.push('Запись в реестры животных недоступна — только чтение.');
+        if (!hasPerm('employee:WRITE') && !hasPerm('employee:PII')) notes.push('Карточки ПДн сотрудников недоступны.');
     }
+    $('help-note').textContent = t('help.note') + (notes.length ? ' ' + notes.join(' ') : '');
+    $('help-hotkeys-title').textContent = t('help.hotkeys') + ' · ' + tr(currentPage() ? currentPage().title : '—');
+    const keys = $('help-keys');
+    clear(keys);
+    for (const [key, text] of hotkeyRows()) {
+        keys.appendChild(el('dt', {}, [el('kbd', { text: key })]));
+        keys.appendChild(el('dd', { text }));
+    }
+    const box = $('help-actions');
+    clear(box);
+    const actions = buildActions();
+    let group = '';
+    for (const a of actions) {
+        if (a.group !== group) {
+            group = a.group;
+            box.appendChild(el('h4', { class: 'help-action-group', text: group }));
+        }
+        box.appendChild(el('div', { class: 'help-action-row' }, [
+            el('span', { class: 'action-kind', text: a.kind }),
+            el('span', { class: 'help-action-title', text: a.title }),
+            el('span', { class: 'help-action-hint', text: a.hint })
+        ]));
+    }
+    $('help-demo').textContent = 'director, superuser, dba, vet, foreman, storekeeper — пароль demo1234. Права роли задаются в разделе «Роли и права».';
 }
 function openHelp() { renderHelp(); const d = $('help-dialog'); if (!d.open) d.showModal(); }
 function closeHelp() { const d = $('help-dialog'); if (d && d.open) d.close(); }
@@ -1163,8 +1717,6 @@ function applyLang() {
     setText('#login-submit', 'login.submit');
     setText('#logout-btn', 'logout');
     setText('#refresh-btn', 'refresh');
-    setText('#filters-apply', 'apply');
-    setText('#filters-reset', 'reset');
     setText('#pager-prev', 'prev');
     setText('#pager-next', 'next');
     setText('.login-subtitle', 'login.subtitle');
@@ -1178,7 +1730,6 @@ function applyLang() {
     if (labels[1]) labels[1].textContent = t('login.password');
     $('login').placeholder = t('login.loginPh');
     $('password').placeholder = t('login.passwordPh');
-    $('filter-search').placeholder = t('searchPh');
     const hint = document.querySelector('.login-demo-hint');
     if (hint) {
         clear(hint);
@@ -1186,9 +1737,11 @@ function applyLang() {
         hint.appendChild(el('code', { text: 'demo1234' }));
     }
 
-    const filterLabels = document.querySelectorAll('.filters-row .field-label');
-    const keys = ['search', 'from', 'to', 'status', 'limit'];
-    filterLabels.forEach((n, i) => { if (keys[i]) n.textContent = t(keys[i]); });
+    const pagerLimit = $('pager-limit');
+    if (pagerLimit) {
+        const lbl = pagerLimit.parentElement && pagerLimit.parentElement.querySelector('.field-label');
+        if (lbl) lbl.textContent = t('limit');
+    }
 
     for (const link of document.querySelectorAll('#sidebar .nav-link[data-view]')) {
         const pair = NAV_LABELS[link.dataset.view];
@@ -1199,22 +1752,15 @@ function applyLang() {
         const p = NAV_GROUP_LABELS[h.dataset.ru];
         if (p) h.textContent = state.lang === 'en' ? p[1] : p[0];
     }
-    const hotkeyHint = document.querySelector('.hotkeys-hint');
-    if (hotkeyHint) {
-        clear(hotkeyHint);
-        const parts = [['?', t('hk.help')], ['/', t('hk.focus')], ['n', t('hk.new')], ['r', t('hk.refresh')], ['Esc', t('hk.close')]];
-        parts.forEach(([k, txt], i) => {
-            if (i) hotkeyHint.appendChild(document.createTextNode(' · '));
-            hotkeyHint.appendChild(el('kbd', { text: k }));
-            hotkeyHint.appendChild(document.createTextNode(' ' + txt));
-        });
-    }
+    setText('#actions-btn-label', 'actions.palette');
+    for (const n of document.querySelectorAll('.hotkeys-actions-label')) n.textContent = t('actions.palette');
+    renderHotkeyHint();
+    if ($('action-dialog') && $('action-dialog').open) renderActionList($('action-search').value);
     const langBtn = $('lang-toggle');
     if (langBtn) { langBtn.textContent = state.lang === 'ru' ? 'EN' : 'RU'; langBtn.title = t('lang.switch'); }
     $('theme-label').textContent = state.theme === 'dark' ? t('theme.dark') : t('theme.light');
-    const helpTitle = $('help-title');
-    if (helpTitle) helpTitle.textContent = t('help.title');
-    if (state.page) renderChrome(currentPage());
+    if ($('help-dialog') && $('help-dialog').open) renderHelp();
+    if (state.page) { renderChrome(currentPage()); configureFilters(currentPage()); }
 }
 
 function showLogin(message) {
@@ -1328,6 +1874,9 @@ function highlightMenu() {
 }
 
 function defaultPage() {
+    /* Точка входа для всех ролей — «Главная»: она не требует права и собирает
+       показатели только по разрешённым разделам. */
+    if (PAGES.home) return 'home';
     const first = document.querySelector('#sidebar .nav-link[data-permission]');
     if (first) {
         const li = first.closest('li');
@@ -1359,15 +1908,21 @@ function route() {
     state.pageNo = 1;
     state.offset = 0;
     state.sort = '';
+    state.filters = {};
     state.extra = {};
     state.extraEndpoint = null;
     state.selectedRow = null;
     state.chartVariants = [];
     state.chartCurrent = null;
-    if (page.preset) Object.assign(state.extra, page.preset);
+    state.statCards = [];
+    state.backupData = null;
+    state.perfData = null;
+    state.herdData = null;
+    if (page.preset) Object.assign(state.filters, page.preset);
     highlightMenu();
     renderChrome(page);
     configureFilters(page);
+    updatePager();
     hideChart();
     if (id !== 'plots' && id !== 'grazing') hideMap();
     loadPage();
@@ -1377,8 +1932,13 @@ function renderChrome(page) {
     const pair = (v) => Array.isArray(v) ? (state.lang === 'en' ? v[1] : v[0]) : String(v || '');
     $('page-eyebrow').textContent = pair(page.eyebrow);
     $('page-title').textContent = pair(page.title);
-    $('create-btn').textContent = t('create');
-    show($('create-btn'), !!(page.crud && page.crud.createFields && hasPerm(page.writePerm)));
+    state.createAction = currentCreateAction(page);
+    const createBtn = $('create-btn');
+    createBtn.textContent = state.createAction
+        ? '+ ' + state.createAction.short + '  [N]'
+        : t('actions.palette') + '  [Ctrl K]';
+    createBtn.title = state.createAction ? state.createAction.hint : 'Все доступные роли действия';
+    show(createBtn, !!state.createAction);
 
     const bar = $('page-actions');
     for (const n of [...bar.querySelectorAll('.js-toolbar')]) n.remove();
@@ -1391,110 +1951,189 @@ function renderChrome(page) {
         }));
     }
     updateUserChip();
+    renderHotkeyHint();
+}
+
+/* --------------------------------------------------------------------------
+ * 8. Панель инструментов раздела: фильтры по полям (у заголовка)
+ * -------------------------------------------------------------------------- */
+/** Привести опции фильтра к [{value,label}] (строки, пары, объекты). */
+function normalizeFilterOptions(list) {
+    return (list || []).map((o) => {
+        if (Array.isArray(o)) return { value: o[0], label: o[1] !== undefined ? o[1] : String(o[0]) };
+        if (o && typeof o === 'object') {
+            return { value: o.value, label: o.label !== undefined ? o.label : (state.lang === 'en' && o.en ? o.en : (o.ru || o.value)) };
+        }
+        return { value: o, label: String(o) };
+    });
+}
+
+/** Догрузить опции селекта из справочника (/positions, /animals/herd, …). */
+async function loadFilterOptions(f) {
+    const res = await api('GET', f.optionsFrom, undefined, { query: { limit: MAX_LIMIT }, silent: true });
+    let rows = Array.isArray(res) ? res : (res && Array.isArray(res.data) ? res.data : []);
+    if (f.optionsPath) {
+        const d = res && res.data;
+        rows = d && Array.isArray(d[f.optionsPath]) ? d[f.optionsPath] : [];
+    }
+    return rows.map((r) => ({
+        value: r.id !== undefined && r.id !== null ? r.id : (r.code !== undefined ? r.code : r.setting_key),
+        label: r.label || r.name || r.full_name || r.login || r.code || ('#' + r.id)
+    }));
 }
 
 function configureFilters(page) {
-    $('filter-search').value = state.filters.q || '';
-    $('filter-from').value = state.filters.from || '';
-    $('filter-to').value = state.filters.to || '';
-    $('filter-limit').value = String(state.limit);
+    const box = $('page-tools');
+    clear(box);
+    const list = (!page.noFilters && page.filters) ? page.filters : [];
+    const variants = page.variants || [];
+    show(box, list.length > 0 || variants.length > 0);
+    if (box.hidden) return;
 
-    const st = $('filter-status');
-    clear(st);
-    st.appendChild(el('option', { value: '', text: t('all') }));
-    for (const v of (page.statusValues || [])) st.appendChild(el('option', { value: v, text: v }));
-    st.value = state.filters.status || '';
-    st.dataset.key = page.statusKey || 'status';
-
-    const datesRelevant = ['report', 'dashboard'].includes(page.kind)
-        || page.endpoint.includes('audit-log') || page.endpoint.includes('/tech/');
-    show($('filter-from').parentElement, datesRelevant);
-    show($('filter-to').parentElement, datesRelevant);
-    show(st.parentElement, !!(page.statusValues && page.statusValues.length));
-
-    const extra = $('filters-extra');
-    clear(extra);
-    for (const v of (page.variants || [])) {
+    /* Переключатели варианта данных (партии / остатки, роли / права). */
+    for (const v of variants) {
         const label = typeof v.label === 'string' ? t(v.label) : (state.lang === 'en' ? v.label[1] : v.label[0]);
-        extra.appendChild(el('button', {
-            class: 'btn ' + (state.extraEndpoint === v.key ? 'btn-primary' : 'btn-ghost'),
+        box.appendChild(el('button', {
+            class: 'btn btn-sm ' + (state.extraEndpoint === v.key ? 'btn-primary' : 'btn-ghost'),
             type: 'button', text: label, dataset: { variant: v.key },
             on: {
                 click: (ev) => {
                     state.extraEndpoint = v.key;
                     state.offset = 0; state.pageNo = 1; state.sort = '';
-                    for (const b of extra.querySelectorAll('[data-variant]')) b.classList.remove('btn-primary');
+                    for (const b of box.querySelectorAll('[data-variant]')) {
+                        b.classList.remove('btn-primary'); b.classList.add('btn-ghost');
+                    }
                     ev.currentTarget.classList.add('btn-primary');
+                    ev.currentTarget.classList.remove('btn-ghost');
                     loadPage();
                 }
             }
         }));
     }
-    for (const f of (page.extraFilters || [])) {
-        extra.appendChild(el('span', { class: 'hint', text: labelOf(f.name) }));
-        const input = el('input', {
-            class: 'field-input',
-            type: f.type === 'number' ? 'number' : (f.type === 'bool' ? 'checkbox' : 'text'),
-            placeholder: f.ph || '', dataset: { extra: f.name }
-        });
-        if (f.type === 'bool') { input.classList.remove('field-input'); input.style.width = 'auto'; }
-        if (state.extra[f.name] !== undefined) {
-            if (f.type === 'bool') input.checked = state.extra[f.name] === 'true' || state.extra[f.name] === true;
-            else input.value = String(state.extra[f.name]);
+
+    for (const f of list) {
+        const wrap = el('label', { class: 'field field-inline tool-field' });
+        wrap.appendChild(el('span', { class: 'field-label', text: f.label || labelOf(f.name) }));
+        let input;
+        if (f.type === 'select') {
+            input = el('select', { class: 'field-input', dataset: { filter: f.name } });
+            input.appendChild(el('option', { value: '', text: t('all') }));
+            for (const o of normalizeFilterOptions(f.options)) {
+                input.appendChild(el('option', { value: o.value, text: o.label }));
+            }
+            input.value = state.filters[f.name] !== undefined ? String(state.filters[f.name]) : '';
+            if (f.optionsFrom) {
+                const node = input;
+                loadFilterOptions(f).then((rows) => {
+                    if (!node.isConnected) return;
+                    const cur = node.value;
+                    for (const o of rows) node.appendChild(el('option', { value: o.value, text: o.label }));
+                    node.value = cur;
+                }).catch(() => { /* нет права — останется «Все» */ });
+            }
+            input.addEventListener('change', applyFilters);
+        } else if (f.type === 'checkbox') {
+            input = el('input', { type: 'checkbox', dataset: { filter: f.name } });
+            input.checked = state.filters[f.name] === 'true';
+            input.addEventListener('change', applyFilters);
+            wrap.classList.add('tool-check');
+            wrap.appendChild(el('span', { class: 'checkbox' }, [input, el('span', { text: f.label || labelOf(f.name) })]));
+            const lbl = wrap.querySelector(':scope > .field-label');
+            if (lbl) lbl.remove();
+            box.appendChild(wrap);
+            continue;
+        } else if (f.type === 'date') {
+            input = el('input', { class: 'field-input', type: 'date', dataset: { filter: f.name } });
+            input.value = state.filters[f.name] || '';
+            input.addEventListener('change', applyFilters);
+        } else {
+            input = el('input', { class: 'field-input', type: 'search', dataset: { filter: f.name }, placeholder: f.ph || t('searchPh') });
+            input.value = state.filters[f.name] || '';
+            input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); applyFilters(); } });
+            input.addEventListener('input', debounce(() => applyFilters(), 400));
         }
-        extra.appendChild(input);
+        wrap.appendChild(input);
+        box.appendChild(wrap);
     }
-    show(extra, extra.childNodes.length > 0);
+
+    if (list.length) {
+        box.appendChild(el('button', {
+            class: 'btn btn-sm btn-ghost tool-reset', type: 'button', text: t('reset'),
+            on: { click: () => resetFilters() }
+        }));
+    }
 }
 
+/** Считать значения фильтров из #page-tools (пустые не сохраняем). */
 function readFilters() {
-    state.filters = {
-        q: $('filter-search').value.trim(),
-        from: $('filter-from').value,
-        to: $('filter-to').value,
-        status: $('filter-status').value,
-        limit: Number($('filter-limit').value) || DEFAULT_LIMIT
-    };
-    state.limit = Math.min(Math.max(1, state.filters.limit), MAX_LIMIT);
-    state.offset = (state.pageNo - 1) * state.limit;
-    const extra = {};
-    for (const node of $('filters-extra').querySelectorAll('[data-extra]')) {
-        const k = node.dataset.extra;
-        const v = node.type === 'checkbox' ? (node.checked ? 'true' : '') : String(node.value).trim();
-        if (v) extra[k] = v;
+    const next = {};
+    for (const node of $('page-tools').querySelectorAll('[data-filter]')) {
+        const k = node.dataset.filter;
+        const v = node.type === 'checkbox' ? (node.checked ? 'true' : '') : String(node.value || '').trim();
+        if (v) next[k] = v;
     }
     const page = currentPage();
-    if (page && page.preset) Object.assign(extra, page.preset);
-    state.extra = extra;
+    if (page && page.preset) Object.assign(next, page.preset);
+    state.filters = next;
+    state.offset = (state.pageNo - 1) * state.limit;
 }
 
 function queryFor(page) {
-    const q = {
-        limit: state.limit, offset: state.offset,
-        q: state.filters.q || '', from: state.filters.from || '', to: state.filters.to || ''
-    };
-    if (state.filters.status) q[page.statusKey || 'status'] = state.filters.status;
-    if (state.sort) q.sort = state.sort;
-    for (const [k, v] of Object.entries(state.extra || {})) {
+    const q = { limit: state.limit, offset: state.offset };
+    const decls = (page && page.filters) || [];
+    for (const [k, v] of Object.entries(state.filters || {})) {
         if (v === '' || v === null || v === undefined) continue;
-        q[k] = v;
+        const decl = decls.find((f) => f.name === k);
+        let key = (decl && decl.query) ? decl.query : k;
+        if (k === 'status' && page && page.statusKey) key = page.statusKey;
+        q[key] = v;
     }
-    if (page.endpoint.includes('/admin/audit-log')) {
-        if (state.filters.from) q.date_from = state.filters.from;
-        if (state.filters.to) q.date_to = state.filters.to;
-        delete q.from; delete q.to;
-    }
+    if (state.sort) q.sort = state.sort;
     return q;
 }
 
 function applyFilters() { readFilters(); state.pageNo = 1; state.offset = 0; loadPage(); }
+
 function resetFilters() {
-    state.filters = { q: '', from: '', to: '', status: '', limit: DEFAULT_LIMIT };
-    state.extra = currentPage() && currentPage().preset ? Object.assign({}, currentPage().preset) : {};
-    state.limit = DEFAULT_LIMIT; state.pageNo = 1; state.offset = 0; state.sort = '';
+    const page = currentPage();
+    state.filters = page && page.preset ? Object.assign({}, page.preset) : {};
     state.extraEndpoint = null;
-    configureFilters(currentPage());
+    state.pageNo = 1; state.offset = 0; state.sort = '';
+    configureFilters(page);
     loadPage();
+}
+
+/* --------------------------------------------------------------------------
+ * 8b. Плашка показателей раздела (GET /stats/:section)
+ * -------------------------------------------------------------------------- */
+async function loadStats(page) {
+    if (!page || !page.statSection) return null;
+    try {
+        const res = await api('GET', '/stats/' + page.statSection, undefined, { silent: true });
+        return (res && res.data && Array.isArray(res.data.cards)) ? res.data : null;
+    } catch { return null; }
+}
+
+function renderStatStrip(data) {
+    const box = $('stat-strip');
+    clear(box);
+    const cards = (data && data.cards) || [];
+    if (!cards.length) { show(box, false); return; }
+    for (const c of cards) {
+        const value = (typeof c.value === 'number') ? humanNumber(c.value) : String(c.value === null || c.value === undefined ? '—' : c.value);
+        box.appendChild(el('div', {
+            class: 'stat-card' + (c.tone ? ' tone-' + c.tone : ''),
+            title: c.hint || c.label
+        }, [
+            el('span', { class: 'stat-label', text: c.label }),
+            el('span', { class: 'stat-value' }, [
+                document.createTextNode(value),
+                c.unit ? el('span', { class: 'stat-unit', text: ' ' + c.unit }) : null
+            ]),
+            c.hint ? el('span', { class: 'stat-hint', text: c.hint }) : null
+        ]));
+    }
+    show(box, true);
 }
 
 function setLoading() {
@@ -1521,14 +2160,32 @@ async function loadPage() {
     if (!page || !state.token) return;
     const ticket = ++state.requestId;
     setLoading();
+    const statsPromise = loadStats(page);
     try {
-        const result = page.kind === 'grazing' ? await loadGrazing() : await loadGeneric(page);
+        let result;
+        if (page.kind === 'home') {
+            result = { rows: [], total: 0 };
+        } else if (page.kind === 'grazing') {
+            result = await loadGrazing();
+        } else if (page.kind === 'backups') {
+            result = await loadBackups();
+        } else if (page.kind === 'metrics-perf') {
+            result = await loadPerf();
+        } else {
+            result = await loadGeneric(page);
+        }
+        const stats = await statsPromise;
         if (ticket !== state.requestId) return;
+        state.statCards = (stats && stats.cards) || [];
+        renderStatStrip(stats);
         state.data = result.rows || [];
         state.total = Number(result.total !== undefined ? result.total : state.data.length) || 0;
         state.series = result.series || null;
         state.plotsCache = result.plots || [];
         state.loadCache = result.load || [];
+        state.backupData = result.backup || null;
+        state.perfData = result.perf || null;
+        state.herdData = result.herd || null;
         $('view').setAttribute('aria-busy', 'false');
         renderView(page, result);
     } catch (err) {
@@ -1538,13 +2195,37 @@ async function loadPage() {
     }
 }
 
+/** Экран «Резервные копии»: текущая копия, период, история и восстановления. */
+async function loadBackups() {
+    const res = await api('GET', '/tech/backups/overview', undefined, { silent: true });
+    return { rows: [], total: 0, backup: (res && res.data) || {} };
+}
+
+/** Экран «Скорость запросов к БД». */
+async function loadPerf() {
+    const res = await api('GET', '/tech/metrics/perf', undefined, { silent: true });
+    return { rows: [], total: 0, perf: (res && res.data) || {} };
+}
+
 async function loadGeneric(page) {
     const res = await api('GET', endpointOf(page), undefined, { query: queryFor(page) });
     let rows = [];
-    if (Array.isArray(res)) rows = res;
-    else if (res && Array.isArray(res.data)) rows = res.data;
-    else if (res && typeof res.data === 'object' && res.data !== null) rows = [res.data];
-    else if (res && typeof res === 'object' && !res.data) rows = [res];
+    // rowsFrom: для контура администратора БД ответы имеют вложенные массивы
+    // (напр. {data: {files: [...]}}), а не плоский {data: [...]}.
+    if (page.rowsFrom && res && res.data) {
+        const nested = res.data[page.rowsFrom];
+        if (Array.isArray(nested)) rows = nested;
+        else if (res.data[page.rowsFrom] && typeof res.data[page.rowsFrom] === 'object') {
+            const inner = Object.values(res.data[page.rowsFrom]).find(Array.isArray);
+            rows = inner || [res.data[page.rowsFrom]];
+        }
+    }
+    if (!rows.length) {
+        if (Array.isArray(res)) rows = res;
+        else if (res && Array.isArray(res.data)) rows = res.data;
+        else if (res && typeof res.data === 'object' && res.data !== null) rows = [res.data];
+        else if (res && typeof res === 'object' && !res.data) rows = [res];
+    }
     const total = res && res.total !== undefined ? res.total : rows.length;
     const series = res && res.series ? res.series : null;
     return { rows, total, series };
@@ -1556,12 +2237,14 @@ async function loadGrazing() {
         api('GET', '/pasture-plots', undefined, { query: { limit: MAX_LIMIT }, silent: true }).catch(() => null),
         api('GET', '/reports/pasture-load', undefined, { query: { limit: MAX_LIMIT }, silent: true }).catch(() => null),
         api('GET', '/animals', undefined, { query: { limit: MAX_LIMIT }, silent: true }).catch(() => null),
-        api('GET', '/grazing/active', undefined, { query: { limit: MAX_LIMIT }, silent: true }).catch(() => null),
-        api('GET', '/admin/audit-log', undefined, {
-            query: { entity_name: 'grazing_event', action: 'CREATE', limit: 100 }, silent: true
-        }).catch(() => null)
+        api('GET', '/animals/herd', undefined, { silent: true }).catch(() => null),
+        hasPerm('audit:READ')
+            ? api('GET', '/admin/audit-log', undefined, {
+                query: { entity_name: 'grazing_event', action: 'CREATE', limit: 100 }, silent: true
+            }).catch(() => null)
+            : Promise.resolve(null)
     ];
-    const [plotsRes, loadRes, animalsRes, activeRes, auditRes] = await Promise.all(requests);
+    const [plotsRes, loadRes, animalsRes, herdRes, auditRes] = await Promise.all(requests);
     const plots = plotsRes && Array.isArray(plotsRes.data) ? plotsRes.data : [];
     const load = loadRes && Array.isArray(loadRes.data) ? loadRes.data : [];
     const animals = animalsRes && Array.isArray(animalsRes.data) ? animalsRes.data : [];
@@ -1572,37 +2255,27 @@ async function loadGrazing() {
         if (a.group_id !== undefined && a.group_id !== null && a.group_name) groupNames.set(String(a.group_id), a.group_name);
     }
 
-    /* Источник активных назначений: /grazing/active → аудит CREATE → отчёт по нагрузке. */
+    /* Источник активных назначений: аудит CREATE (grazing_event) → отчёт по нагрузке. */
     let events = [];
-    const activeRows = activeRes && Array.isArray(activeRes.data) ? activeRes.data : [];
-    if (activeRows.length) {
-        events = activeRows.map((r) => ({
-            plot_id: r.plot_id, group_id: r.group_id,
-            group_name: r.group_name || groupNames.get(String(r.group_id)) || '',
-            head_count: r.head_count || r.head_count_snapshot || r.active_heads || 0,
-            days: r.days_on_plot !== undefined ? r.days_on_plot : daysSince(r.started_at)
+    const auditRows = auditRes && Array.isArray(auditRes.data) ? auditRes.data : [];
+    const seen = new Set();
+    for (const r of auditRows) {
+        const after = r.after_json || {};
+        const gid = after.group_id !== undefined ? after.group_id : null;
+        const pid = after.plot_id !== undefined ? after.plot_id : null;
+        if (gid === null || pid === null || seen.has(String(gid))) continue;
+        seen.add(String(gid));
+        events.push({
+            plot_id: pid, group_id: gid,
+            group_name: groupNames.get(String(gid)) || '',
+            head_count: 0, days: daysSince(r.occurred_at)
+        });
+    }
+    if (!events.length) {
+        events = load.filter((r) => r.in_use || Number(r.active_heads) > 0).map((r) => ({
+            plot_id: r.plot_id || r.id, group_id: null, group_name: '',
+            head_count: r.active_heads || 0, days: null
         }));
-    } else {
-        const auditRows = auditRes && Array.isArray(auditRes.data) ? auditRes.data : [];
-        const seen = new Set();
-        for (const r of auditRows) {
-            const after = r.after_json || {};
-            const gid = after.group_id !== undefined ? after.group_id : null;
-            const pid = after.plot_id !== undefined ? after.plot_id : null;
-            if (gid === null || pid === null || seen.has(String(gid))) continue;
-            seen.add(String(gid));
-            events.push({
-                plot_id: pid, group_id: gid,
-                group_name: groupNames.get(String(gid)) || '',
-                head_count: 0, days: daysSince(r.occurred_at)
-            });
-        }
-        if (!events.length) {
-            events = load.filter((r) => r.in_use || Number(r.active_heads) > 0).map((r) => ({
-                plot_id: r.plot_id || r.id, group_id: null, group_name: '',
-                head_count: r.active_heads || 0, days: null
-            }));
-        }
     }
 
     const plotsById = new Map(plots.map((p) => [String(p.id), p]));
@@ -1628,7 +2301,7 @@ async function loadGrazing() {
             _over: loadVal > norm && norm > 0
         };
     });
-    return { rows, total: rows.length, plots, load };
+    return { rows, total: rows.length, plots, load, herd: (herdRes && herdRes.data) || null };
 }
 
 function daysSince(iso) {
@@ -1801,13 +2474,19 @@ function renderKpi(rows, keys) {
 }
 
 function updatePager() {
+    const page = currentPage();
     const total = state.total;
     const pages = Math.max(1, Math.ceil(total / state.limit));
     if (state.pageNo > pages) { state.pageNo = pages; state.offset = (pages - 1) * state.limit; }
-    $('pager-info').textContent = t('total') + ': ' + humanNumber(total) + ' · ' + t('limit') + ': ' + state.limit;
+    const pager = $('pager');
+    if (page && page.noPager) { show(pager, false); return; }
+    show(pager, true);
+    $('pager-info').textContent = t('total') + ': ' + humanNumber(total);
     $('pager-page').textContent = state.pageNo + ' / ' + pages;
     $('pager-prev').disabled = state.pageNo <= 1;
     $('pager-next').disabled = state.pageNo >= pages;
+    const lim = $('pager-limit');
+    if (lim) lim.value = String(state.limit);
 }
 
 function renderView(page, result) {
@@ -1815,7 +2494,13 @@ function renderView(page, result) {
     clear(holder);
     holder.setAttribute('aria-busy', 'false');
 
-    if (page.kind === 'dashboard') {
+    if (page.kind === 'home') {
+        renderHome(page);
+    } else if (page.kind === 'backups') {
+        renderBackups(result.backup || {});
+    } else if (page.kind === 'metrics-perf') {
+        renderPerf(result.perf || {});
+    } else if (page.kind === 'dashboard') {
         const kpiKeys = ['animals', 'sick', 'tasks_open', 'tasks_overdue', 'vaccination_overdue', 'stock_on_hand', 'stock_mismatches', 'active_grazings', 'plots_not_rested', 'purchase_requests_new', 'unread_notifications', 'elevated_actions', 'denies', 'backups_ok'];
         renderKpi(result.rows, kpiKeys);
         holder.appendChild(el('h3', { class: 'mt-3 mb-2', text: t('metric.summary') }));
@@ -1829,6 +2514,9 @@ function renderView(page, result) {
         renderTable(page, result.rows, t('report.table'));
         setupChart(result.series, page);
         addExportButton(page);
+    } else if (page.kind === 'dba-monitor') {
+        renderDbaMonitor(result.rows[0] || {});
+        hideChart();
     } else if (page.kind === 'grazing') {
         renderGrazing(page, result);
     } else {
@@ -1838,8 +2526,632 @@ function renderView(page, result) {
     updatePager();
 }
 
+/** Мониторинг БД: сводка + список проблем + диагностические таблицы. */
+function renderDbaMonitor(h) {
+    const holder = $('view');
+    const ov = h.overview || {}, cache = h.cache || {}, vac = h.vacuum || {};
+    const pair = (ru, en) => state.lang === 'en' ? en : ru;
+
+    const severityClass = h.severity === 'CRITICAL' ? 'is-warn' : (h.severity === 'WARNING' ? 'is-warn' : '');
+    const kpis = [
+        [pair('Состояние', 'Status'), h.severity || '—'],
+        [pair('База', 'Database'), ov.database || '—'],
+        [pair('Размер', 'Size'), ov.db_size_pretty || '—'],
+        [pair('Таблиц / индексов', 'Tables / indexes'), `${ov.tables_count || 0} / ${ov.indexes_count || 0}`],
+        [pair('Соединения', 'Connections'), `${ov.connections || 0} / ${ov.max_connections || 0}`],
+        [pair('Активные / заблок.', 'Active / blocked'), `${ov.active_queries || 0} / ${ov.blocked_queries || 0}`],
+        [pair('Кэш-хит', 'Cache hit'), `${cache.cache_hit_ratio != null ? cache.cache_hit_ratio + '%' : '—'}`],
+        [pair('Использ. индексов', 'Index usage'), `${cache.index_usage_ratio != null ? cache.index_usage_ratio + '%' : '—'}`],
+        [pair('Мёртвые строки', 'Dead rows'), h.deadRows != null ? humanNumber(h.deadRows) : '—'],
+        [pair('Не вакуумир. таблиц', 'Stale tables'), vac.totals ? vac.totals.stale_tables : '—'],
+        [pair('Неиспольз. индексов', 'Unused indexes'), (h.unusedIndexes || []).length],
+        [pair('Полных переборов', 'Seq scans'), (h.seqScans || []).length],
+        [pair('Версия', 'Version'), (ov.server_version || '').split(' on ')[0].split(',')[0]],
+        [pair('Аптайм', 'Uptime'), formatUptime(ov.uptime)],
+    ];
+    const grid = el('div', { class: 'kpi-grid' });
+    for (const [label, val] of kpis) {
+        grid.appendChild(el('div', { class: 'kpi-card' + (label === pair('Состояние', 'Status') && severityClass ? ' ' + severityClass : '') }, [
+            el('span', { class: 'kpi-label', text: label }),
+            el('span', { class: 'kpi-value', text: String(val == null ? '—' : val) })
+        ]));
+    }
+    holder.appendChild(grid);
+
+    holder.appendChild(el('h3', { class: 'mt-3 mb-2', text: pair('Диагностика', 'Diagnostics') }));
+    const problems = h.problems || [];
+    holder.appendChild(el(problems.length ? 'ul' : 'p', {
+        class: problems.length ? 'notice' : 'notice',
+        text: problems.length ? '' : pair('Проблем не обнаружено', 'No problems detected')
+    }, problems.map((p) => el('li', { text: p }))));
+
+    if (!h.slowQueries || !h.slowQueries.available) {
+        holder.appendChild(el('p', { class: 'hint', text: (h.slowQueries && h.slowQueries.note) || '' }));
+    }
+
+    const sections = [
+        [pair('Таблица', 'Table'), pair('Мёртвые', 'Dead'), pair('Доля мёртвых', 'Dead ratio'), pair('Строк', 'Live rows'), pair('Посл. вакуум', 'Last vacuum')],
+        ...(vac.tables || []).slice(0, 10).map((t) => [
+            t.table_name, String(t.n_dead_tup), String(t.dead_ratio) + '%',
+            String(t.n_live_tup), t.last_autovacuum ? String(t.last_autovacuum).slice(0, 19) : '—'
+        ]),
+    ];
+    if (vac.tables && vac.tables.length) {
+        holder.appendChild(el('h3', { class: 'mt-3 mb-2', text: pair('Обслуживание таблиц', 'Table maintenance') }));
+        holder.appendChild(simpleDbaTable(sections));
+    }
+    const idx = h.unusedIndexes || [];
+    if (idx.length) {
+        holder.appendChild(el('h3', { class: 'mt-3 mb-2', text: pair('Неиспользуемые индексы', 'Unused indexes') }));
+        holder.appendChild(simpleDbaTable([
+            [pair('Индекс', 'Index'), pair('Таблица', 'Table'), pair('Размер', 'Size'), pair('Сканирований', 'Scans')],
+            ...idx.slice(0, 10).map((i) => [i.index_name, i.table_name, i.index_size, String(i.idx_scan)])
+        ]));
+    }
+    const seq = h.seqScans || [];
+    if (seq.length) {
+        holder.appendChild(el('h3', { class: 'mt-3 mb-2', text: pair('Последовательные чтения', 'Sequential scans') }));
+        holder.appendChild(simpleDbaTable([
+            [pair('Таблица', 'Table'), 'Seq scan', 'Idx scan', pair('Строк', 'Rows'), pair('Доля seq', 'Seq ratio')],
+            ...seq.slice(0, 10).map((s) => [s.table_name, String(s.seq_scan), String(s.idx_scan), String(s.n_live_tup), String(s.seq_ratio) + '%'])
+        ]));
+    }
+    if (h.blocked && h.blocked.length) {
+        holder.appendChild(el('h3', { class: 'mt-3 mb-2', text: pair('Блокировки', 'Locks') }));
+        holder.appendChild(simpleDbaTable([
+            ['PID', pair('Кем заблокирован', 'Blocked by'), pair('Запрос', 'Query')],
+            ...h.blocked.map((b) => [String(b.pid), String(b.blocker_pids || ''), String(b.blocked_query || '').slice(0, 90)])
+        ]));
+    }
+}
+
+/** pg даёт interval объектом {days,hours,minutes,...} или строкой — показываем читаемо. */
+function formatUptime(v) {
+    if (!v) return '—';
+    if (typeof v === 'object') {
+        const d = Number(v.days || 0), h = Number(v.hours || 0), m = Number(v.minutes || 0);
+        return (d ? d + ' дн. ' : '') + h + ' ч. ' + m + ' мин.';
+    }
+    return String(v).slice(0, 21);
+}
+
+function simpleDbaTable(rows) {
+    const wrap = el('div', { class: 'table-wrap' });
+    const table = el('table', { class: 'data-table' });
+    const head = el('thead');
+    const hr = el('tr');
+    for (const c of rows[0]) hr.appendChild(el('th', { text: c }));
+    head.appendChild(hr); table.appendChild(head);
+    const body = el('tbody');
+    for (const r of rows.slice(1)) {
+        const tr = el('tr');
+        for (const c of r) tr.appendChild(el('td', { text: c }));
+        body.appendChild(tr);
+    }
+    table.appendChild(body); wrap.appendChild(table);
+    return wrap;
+}
+
+/** Панель с заголовком и (необязательными) действиями справа. */
+function panel(title, actions) {
+    const box = el('section', { class: 'panel' });
+    const head = el('header', { class: 'panel-head' }, [el('h2', { class: 'panel-title', text: title })]);
+    /* Действия собираются условно (по правам): null-заглушки просто не добавляем. */
+    for (const a of (actions || [])) if (a) head.appendChild(a);
+    box.appendChild(head);
+    return box;
+}
+
+function humanBytes(v) {
+    const n = Number(v);
+    if (!Number.isFinite(n) || n <= 0) return '—';
+    if (n >= 1024 * 1024 * 1024) return (n / (1024 * 1024 * 1024)).toFixed(2) + ' ГБ';
+    if (n >= 1024 * 1024) return (n / (1024 * 1024)).toFixed(1) + ' МБ';
+    if (n >= 1024) return (n / 1024).toFixed(1) + ' КБ';
+    return n + ' Б';
+}
+
+/* ---- Главная: вход по роли ---- */
+const HOME_LINKS = [
+    ['animals', 'Животные', 'animal:READ'], ['tasks', 'Задачи', 'task:READ'],
+    ['grazing', 'Выпас', 'pasture:WRITE'], ['employees', 'Сотрудники', 'employee:READ'],
+    ['stock', 'Склад', 'stock:READ'], ['dashboard', 'Дашборд', 'report:READ'],
+    ['audit-log', 'Журнал аудита', 'audit:READ'], ['admin-users', 'Пользователи', 'user:READ'],
+    ['backups', 'Резервные копии', 'backup:READ'], ['metrics', 'Скорость БД', 'tech:READ']
+];
+
+function renderHome(page) {
+    const holder = $('view');
+    const u = state.user || {};
+    const role = (u.role && (u.role.name || u.role.code)) || '—';
+    const hour = new Date().getHours();
+    const greet = hour < 6 ? 'Доброй ночи' : (hour < 12 ? 'Доброе утро' : (hour < 18 ? 'Добрый день' : 'Добрый вечер'));
+
+    const hero = el('section', { class: 'home-hero' });
+    hero.appendChild(el('h2', { class: 'home-greet', text: `${greet}, ${u.full_name || u.login || 'коллега'}` }));
+    hero.appendChild(el('p', { class: 'home-role', text: `Роль: ${role} · ${new Date().toLocaleDateString('ru-RU', { day: '2-digit', month: 'long', year: 'numeric' })}` }));
+    if (!state.statCards.length) {
+        hero.appendChild(el('p', { class: 'hint', text: 'Показатели появятся, как только у роли будут права на данные разделов.' }));
+    } else {
+        const warn = state.statCards.filter((c) => c.tone === 'warn' || c.tone === 'bad');
+        hero.appendChild(el('p', {
+            class: warn.length ? 'notice' : 'notice notice-ok',
+            text: warn.length
+                ? 'Требует внимания: ' + warn.map((c) => `${c.label} — ${c.value}${c.unit ? ' ' + c.unit : ''}`).join('; ')
+                : 'Срочных отклонений нет — показатели в норме.'
+        }));
+    }
+    holder.appendChild(hero);
+
+    const links = HOME_LINKS.filter(([, , perm]) => hasPerm(perm));
+    const grid = el('div', { class: 'quick-grid' });
+    for (const [id, label] of links) {
+        grid.appendChild(el('button', {
+            class: 'quick-link', type: 'button', text: label,
+            on: { click: () => navigate(id) }
+        }));
+    }
+    const box = panel('Быстрый переход');
+    box.appendChild(grid);
+    holder.appendChild(box);
+
+    holder.appendChild(el('p', {
+        class: 'hint',
+        text: 'Плашка показателей на каждом экране строится из /stats/:section — только по данным, разрешённым роли.'
+    }));
+    hideChart();
+}
+
+/* ---- Резервные копии: текущая копия + период + история + восстановления ---- */
+function renderBackups(data) {
+    const holder = $('view');
+    const cur = data.current || null;
+    const s = data.settings || {};
+    const history = data.history || [];
+    const restores = data.restores || [];
+    const scheduler = data.scheduler || {};
+
+    const currentBox = el('section', { class: 'backup-current' + (cur ? '' : ' is-empty') });
+    if (cur) {
+        currentBox.appendChild(el('div', { class: 'backup-current-head' }, [
+            el('span', { class: 'backup-badge', text: cur.status || 'OK' }),
+            el('h2', { class: 'panel-title', text: 'Текущая резервная копия' })
+        ]));
+        const rows = [
+            ['Копия', '#' + cur.id + ' · ' + cur.backup_type + (cur.origin ? ' · ' + cur.origin : '')],
+            ['Создана', formatDate(cur.finished_at || cur.started_at)],
+            ['Размер', humanBytes(cur.size_bytes)],
+            ['Файл', cur.file_path || '—'],
+            ['Инициатор', cur.initiated_by_login || '—'],
+            ['Восстановлений', String(cur.restores || 0)]
+        ];
+        const dl = el('div', { class: 'backup-facts' });
+        for (const [k, v] of rows) {
+            dl.appendChild(el('div', { class: 'backup-fact' }, [
+                el('span', { class: 'backup-fact-key', text: k }),
+                el('span', { class: 'backup-fact-val', text: v })
+            ]));
+        }
+        currentBox.appendChild(dl);
+        const actions = el('div', { class: 'backup-actions' });
+        if (hasPerm('backup:READ')) {
+            actions.appendChild(el('button', {
+                class: 'btn btn-ghost btn-sm', type: 'button', text: 'Скачать файл',
+                on: { click: () => downloadBackupFile(cur) }
+            }));
+        }
+        if (hasPerm('backup:EXEC')) {
+            actions.appendChild(el('button', {
+                class: 'btn btn-primary btn-sm', type: 'button', text: 'Создать копию',
+                on: { click: () => openBackup() }
+            }));
+            actions.appendChild(el('button', {
+                class: 'btn btn-ghost btn-sm', type: 'button', text: 'Восстановить из этой копии',
+                on: { click: () => openRestore(cur.id) }
+            }));
+        }
+        currentBox.appendChild(actions);
+    } else {
+        currentBox.appendChild(el('h2', { class: 'panel-title', text: 'Текущая резервная копия' }));
+        currentBox.appendChild(el('p', { class: 'notice notice-bad', text: 'Успешных копий ещё нет — создайте первой же кнопкой ниже.' }));
+        if (hasPerm('backup:EXEC')) {
+            currentBox.appendChild(el('button', {
+                class: 'btn btn-primary', type: 'button', text: 'Создать копию',
+                on: { click: () => openBackup() }
+            }));
+        }
+    }
+    holder.appendChild(currentBox);
+
+    /* Настройки периода */
+    const sched = panel('Период копирования', []);
+    const form = el('div', { class: 'backup-schedule' });
+    const addField = (labelText, node) => form.appendChild(el('label', { class: 'field field-inline' }, [
+        el('span', { class: 'field-label', text: labelText }), node
+    ]));
+
+    const enabled = el('input', { type: 'checkbox' });
+    enabled.checked = s.enabled !== false;
+    const schedule = el('select', { class: 'field-input' });
+    for (const [v, l] of [['DAILY', 'Ежедневно'], ['WEEKLY', 'Еженедельно'], ['OFF', 'Выключено']]) {
+        schedule.appendChild(el('option', { value: v, text: l }));
+    }
+    schedule.value = String(s.schedule || 'DAILY');
+    const time = el('input', { class: 'field-input', type: 'text', placeholder: 'ЧЧ:ММ' });
+    time.value = s.time || '02:00';
+    const retention = el('input', { class: 'field-input', type: 'number', min: '1', max: '3650' });
+    retention.value = String(s.retention_days || 30);
+    const keepLast = el('input', { class: 'field-input', type: 'number', min: '1', max: '500' });
+    keepLast.value = String(s.keep_last || 10);
+
+    addField('Включено', enabled);
+    addField('Частота', schedule);
+    addField('Время', time);
+    addField('Хранение, дней', retention);
+    addField('Хранить копий', keepLast);
+    sched.appendChild(form);
+
+    const schedActions = el('div', { class: 'backup-actions' });
+    if (data.schedule_due) {
+        schedActions.appendChild(el('span', { class: 'hint', text: 'Следующая плановая: ' + formatDate(data.schedule_due) }));
+    }
+    if (scheduler && scheduler.lastTickAt) {
+        schedActions.appendChild(el('span', { class: 'hint', text: 'Планировщик: ' + (scheduler.enabled ? 'включён' : 'выключен') + ', проверка ' + formatDate(scheduler.lastTickAt) }));
+    }
+    if (hasPerm('backup:EXEC')) {
+        schedActions.appendChild(el('button', {
+            class: 'btn btn-primary btn-sm', type: 'button', text: 'Сохранить период',
+            on: {
+                click: async () => {
+                    try {
+                        await api('PATCH', '/tech/backups/schedule', {
+                            backup_enabled: enabled.checked,
+                            backup_schedule: schedule.value,
+                            backup_time: time.value.trim(),
+                            backup_retention_days: Number(retention.value) || 30,
+                            backup_keep_last: Number(keepLast.value) || 10
+                        }, { silent: true });
+                        toast(t('saved'), 'ok');
+                        loadPage();
+                    } catch (err) { toast(err.message, 'err'); }
+                }
+            }
+        }));
+        schedActions.appendChild(el('button', {
+            class: 'btn btn-ghost btn-sm', type: 'button', text: 'Выполнить план сейчас',
+            on: {
+                click: async () => {
+                    try {
+                        const r = await api('POST', '/tech/backups/schedule/run', {}, { silent: true });
+                        toast((r && r.message) || t('done'), 'ok');
+                        loadPage();
+                    } catch (err) { toast(err.message, 'err'); }
+                }
+            }
+        }));
+    }
+    if (!hasPerm('backup:EXEC')) {
+        enabled.disabled = schedule.disabled = time.disabled = retention.disabled = keepLast.disabled = true;
+    }
+    sched.appendChild(schedActions);
+    holder.appendChild(sched);
+
+    if (data.last_failure) {
+        holder.appendChild(el('p', {
+            class: 'notice notice-bad',
+            text: `Последняя ошибка копирования: #${data.last_failure.id} · ${formatDate(data.last_failure.started_at)} — проверьте тех. лог.`
+        }));
+    }
+
+    /* История копий */
+    const histBox = panel('История копий');
+    const wrap = el('div', { class: 'table-wrap' });
+    const table = el('table', { class: 'data-table' });
+    const head = el('tr');
+    for (const c of ['Копия', 'Тип', 'Статус', 'Создана', 'Размер', 'Хранение, дн.', 'Восстановлений', 'Инициатор', '']) head.appendChild(el('th', { text: c }));
+    table.appendChild(el('thead', {}, [head]));
+    const body = el('tbody');
+    for (const b of history) {
+        const tr = el('tr');
+        tr.appendChild(el('td', { text: '#' + b.id }));
+        tr.appendChild(el('td', { text: b.backup_type || '—' }));
+        tr.appendChild(el('td', {}, [statusBadge(b.status || '—')]));
+        tr.appendChild(el('td', { text: formatDate(b.finished_at || b.started_at) }));
+        tr.appendChild(el('td', { class: 'num', text: humanBytes(b.size_bytes) }));
+        tr.appendChild(el('td', { class: 'num', text: String(b.retention_days || '—') }));
+        tr.appendChild(el('td', { class: 'num', text: String(b.restores || 0) }));
+        tr.appendChild(el('td', { text: b.initiated_by_login || '—' }));
+        const td = el('td', { class: 'cell-actions' });
+        if (b.status === 'OK') {
+            td.appendChild(el('button', {
+                class: 'btn btn-ghost btn-sm', type: 'button', text: 'Скачать',
+                on: { click: () => downloadBackupFile(b) }
+            }));
+            if (hasPerm('backup:EXEC')) {
+                td.appendChild(el('button', {
+                    class: 'btn btn-ghost btn-sm', type: 'button', text: 'Восстановить',
+                    on: { click: () => openRestore(b.id) }
+                }));
+            }
+        }
+        tr.appendChild(td);
+        body.appendChild(tr);
+    }
+    if (!history.length) {
+        body.appendChild(el('tr', {}, [el('td', { colspan: '9' }, [el('div', { class: 'table-empty' }, [
+            el('div', { class: 'big', text: t('empty') }), el('div', { text: 'Копии ещё не создавались.' })
+        ])])]));
+    }
+    table.appendChild(body);
+    wrap.appendChild(table);
+    histBox.appendChild(wrap);
+    holder.appendChild(histBox);
+
+    /* Восстановления — там же, где копии */
+    const restBox = panel('Восстановления');
+    const rwrap = el('div', { class: 'table-wrap' });
+    const rtable = el('table', { class: 'data-table' });
+    const rhead = el('tr');
+    for (const c of ['#', 'Копия', 'Статус', 'Начато', 'Завершено', 'Причина', 'Выполнил']) rhead.appendChild(el('th', { text: c }));
+    rtable.appendChild(el('thead', {}, [rhead]));
+    const rbody = el('tbody');
+    for (const r of restores) {
+        const tr = el('tr');
+        tr.appendChild(el('td', { text: '#' + r.id }));
+        tr.appendChild(el('td', { text: r.backup_job_id ? '#' + r.backup_job_id : '—' }));
+        tr.appendChild(el('td', {}, [statusBadge(r.status || '—')]));
+        tr.appendChild(el('td', { text: formatDate(r.started_at) }));
+        tr.appendChild(el('td', { text: formatDate(r.finished_at) }));
+        tr.appendChild(el('td', { text: r.reason || '—' }));
+        tr.appendChild(el('td', { text: r.performed_by_login || '—' }));
+        rbody.appendChild(tr);
+    }
+    if (!restores.length) {
+        rbody.appendChild(el('tr', {}, [el('td', { colspan: '7' }, [el('div', { class: 'table-empty' }, [
+            el('div', { class: 'big', text: t('empty') }), el('div', { text: 'Восстановлений не было.' })
+        ])])]));
+    }
+    rtable.appendChild(rbody);
+    rwrap.appendChild(rtable);
+    restBox.appendChild(rwrap);
+    holder.appendChild(restBox);
+
+    if (data.files) {
+        holder.appendChild(el('p', { class: 'hint', text: `Каталог копий: ${data.backup_dir || '—'} · файлов на диске: ${data.files.count || 0} · объём ${humanBytes(data.files.bytes)}` }));
+    }
+    hideChart();
+}
+
+/** Скачать файл копии (Bearer-токен, ответ — octet-stream). */
+async function downloadBackupFile(job) {
+    try {
+        const resp = await fetch(API_BASE + '/tech/backups/' + job.id + '/download', {
+            headers: { Authorization: 'Bearer ' + state.token }
+        });
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        const blob = await resp.blob();
+        const url = URL.createObjectURL(blob);
+        const a = el('a', { href: url, download: 'backup_' + job.id + '.dump' });
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 1500);
+    } catch (err) {
+        toast('Не удалось скачать файл: ' + err.message, 'err');
+    }
+}
+
+/* ---- Скорость БД: вердикт, перцентили, корзины, медленные запросы ---- */
+function renderPerf(p) {
+    const holder = $('view');
+    const v = p.verdict || { level: 'UNKNOWN', label: 'Нет данных', text: '' };
+
+    const banner = el('section', { class: 'verdict verdict-' + String(v.level || 'UNKNOWN').toLowerCase() });
+    banner.appendChild(el('span', { class: 'verdict-label', text: v.label || '—' }));
+    banner.appendChild(el('strong', { class: 'verdict-text', text: v.text || '' }));
+    const thr = p.thresholds || {};
+    banner.appendChild(el('span', {
+        class: 'verdict-thresholds',
+        text: `Пороги: норма p95 ≤ ${thr.perf_p95_ok_ms || 100} мс, внимание ≤ ${thr.perf_p95_warn_ms || 300} мс`
+    }));
+    holder.appendChild(banner);
+
+    const cards = [
+        ['Замеров в окне', p.samples, p.window ? 'из ' + p.window : ''],
+        ['Среднее', p.avg_ms, 'мс'],
+        ['Медиана (p50)', p.p50_ms, 'мс'],
+        ['95-й перцентиль', p.p95_ms, 'мс'],
+        ['99-й перцентиль', p.p99_ms, 'мс'],
+        ['Максимум', p.max_ms, 'мс'],
+        ['Медленных (≥300 мс)', p.slow_count, 'шт.'],
+        ['Ошибок', p.error_count, 'шт.'],
+        ['Запросов в минуту', p.per_minute, ''],
+        ['Уникальных запросов', p.statements, '']
+    ];
+    const grid = el('div', { class: 'stat-strip stat-strip-inline' });
+    for (const [label, value, unit] of cards) {
+        const warn = (label.startsWith('Медленных') && Number(value) > 0) || (label === 'Ошибок' && Number(value) > 0);
+        grid.appendChild(el('div', { class: 'stat-card' + (warn ? ' tone-warn' : '') }, [
+            el('span', { class: 'stat-label', text: label }),
+            el('span', { class: 'stat-value' }, [
+                document.createTextNode(typeof value === 'number' ? humanNumber(value) : String(value == null ? '—' : value)),
+                unit ? el('span', { class: 'stat-unit', text: ' ' + unit }) : null
+            ])
+        ]));
+    }
+    holder.appendChild(grid);
+
+    /* Распределение по корзинам */
+    const bucketBox = panel('Распределение по времени ответа');
+    const bars = el('div', { class: 'bucket-list' });
+    for (const b of (p.buckets || [])) {
+        const row = el('div', { class: 'bucket-row' }, [
+            el('span', { class: 'bucket-label', text: b.label }),
+            el('span', { class: 'bucket-track' }, [
+                el('span', {
+                    class: 'bucket-fill' + (b.label === '>300 мс' && b.count ? ' is-bad' : ''),
+                    style: 'width:' + Math.max(1, Number(b.share) || 0) + '%'
+                })
+            ]),
+            el('span', { class: 'bucket-value', text: `${b.count} · ${b.share}%` })
+        ]);
+        bars.appendChild(row);
+    }
+    if (!(p.buckets || []).length) bars.appendChild(el('p', { class: 'hint', text: 'Замеров пока нет — выполните несколько запросов и обновите страницу.' }));
+    bucketBox.appendChild(bars);
+    holder.appendChild(bucketBox);
+
+    /* Самые медленные запросы */
+    const slowBox = panel('Самые медленные запросы', [
+        hasPerm('tech:EXEC') ? el('button', {
+            class: 'btn btn-ghost btn-sm', type: 'button', text: 'Сбросить статистику',
+            on: {
+                click: async () => {
+                    try {
+                        await api('POST', '/tech/metrics/perf/reset', {}, { silent: true });
+                        toast(t('done'), 'ok');
+                        loadPage();
+                    } catch (err) { toast(err.message, 'err'); }
+                }
+            }
+        }) : null
+    ]);
+    const wrap = el('div', { class: 'table-wrap' });
+    const table = el('table', { class: 'data-table' });
+    const head = el('tr');
+    for (const c of ['Запрос', 'Вызовов', 'Среднее, мс', 'Максимум, мс', 'Медленных']) head.appendChild(el('th', { text: c }));
+    table.appendChild(el('thead', {}, [head]));
+    const body = el('tbody');
+    for (const q of (p.slowest || [])) {
+        const tr = el('tr');
+        tr.appendChild(el('td', {}, [el('code', { class: 'sql', text: q.sql })]));
+        tr.appendChild(el('td', { class: 'num', text: String(q.count) }));
+        tr.appendChild(el('td', { class: 'num', text: String(q.avg_ms) }));
+        tr.appendChild(el('td', { class: 'num', text: String(q.max_ms) }));
+        tr.appendChild(el('td', { class: 'num', text: String(q.slow) }));
+        body.appendChild(tr);
+    }
+    if (!(p.slowest || []).length) {
+        body.appendChild(el('tr', {}, [el('td', { colspan: '5' }, [el('div', { class: 'table-empty' }, [
+            el('div', { class: 'big', text: t('empty') }), el('div', { text: 'Ещё не накоплено данных.' })
+        ])])]));
+    }
+    table.appendChild(body);
+    wrap.appendChild(table);
+    slowBox.appendChild(wrap);
+    holder.appendChild(slowBox);
+
+    /* Состояние БД */
+    const db = p.db || {};
+    const dbBox = panel('Состояние базы данных');
+    const dl = el('div', { class: 'backup-facts' });
+    for (const [k, val] of [
+        ['Размер БД', db.db_size || '—'],
+        ['Соединения', `${db.connections || 0} / ${db.max_connections || 0}`],
+        ['Кэш-хит', db.cache_hit_ratio != null ? db.cache_hit_ratio + '%' : '—'],
+        ['Операций записи', humanNumber(db.write_ops || 0)]
+    ]) {
+        dl.appendChild(el('div', { class: 'backup-fact' }, [
+            el('span', { class: 'backup-fact-key', text: k }),
+            el('span', { class: 'backup-fact-val', text: String(val) })
+        ]));
+    }
+    dbBox.appendChild(dl);
+    if ((p.slow_tables || []).length) {
+        const twrap = el('div', { class: 'table-wrap mt-2' });
+        const ttable = el('table', { class: 'data-table' });
+        const th = el('tr');
+        for (const c of ['Таблица', 'Seq scan', 'Index scan', 'Строк', 'Доля seq, %']) th.appendChild(el('th', { text: c }));
+        ttable.appendChild(el('thead', {}, [th]));
+        const tb = el('tbody');
+        for (const s of p.slow_tables) {
+            const tr = el('tr');
+            tr.appendChild(el('td', { text: s.table_name }));
+            tr.appendChild(el('td', { class: 'num', text: String(s.seq_scan) }));
+            tr.appendChild(el('td', { class: 'num', text: String(s.idx_scan) }));
+            tr.appendChild(el('td', { class: 'num', text: humanNumber(s.n_live_tup) }));
+            tr.appendChild(el('td', { class: 'num', text: String(s.seq_scan_pct) }));
+            tb.appendChild(tr);
+        }
+        ttable.appendChild(tb);
+        twrap.appendChild(ttable);
+        dbBox.appendChild(twrap);
+    }
+    holder.appendChild(dbBox);
+    holder.appendChild(el('p', { class: 'hint', text: 'Пороги меняются в настройках хозяйства: perf_p95_ok_ms, perf_p95_warn_ms, perf_slow_ms.' }));
+    hideChart();
+}
+
 function renderGrazing(page, result) {
     const holder = $('view');
+    const herd = result.herd || null;
+
+    if (herd) {
+        const stats = herd.stats || {};
+        const strip = el('div', { class: 'stat-strip stat-strip-inline' });
+        for (const [label, value, unit] of [
+            ['Закреплений', stats.assignments, 'шт.'],
+            ['Покрыто животными', `${stats.animals_covered || 0}/${stats.animals_active || 0}`, 'гол.'],
+            ['Сотрудников с закреплениями', (herd.employees || []).filter((e) => Number(e.assigned) > 0).length, 'чел.'],
+            ['Без закрепления', (herd.unassigned || []).length, 'гол.']
+        ]) {
+            strip.appendChild(el('div', { class: 'stat-card' + (label === 'Без закрепления' && Number((herd.unassigned || []).length) ? ' tone-warn' : '') }, [
+                el('span', { class: 'stat-label', text: label }),
+                el('span', { class: 'stat-value' }, [document.createTextNode(String(value)), el('span', { class: 'stat-unit', text: ' ' + unit })])
+            ]));
+        }
+        holder.appendChild(strip);
+
+        const groupsBox = panel('Группы и участки', [
+            hasPerm('animal:WRITE') ? el('button', {
+                class: 'btn btn-ghost btn-sm', type: 'button', text: 'Закрепить сотрудника',
+                on: { click: () => openAssignEmployee() }
+            }) : null
+        ]);
+        const gwrap = el('div', { class: 'table-wrap' });
+        const gtable = el('table', { class: 'data-table' });
+        const gh = el('tr');
+        for (const c of ['Группа', 'Животных', 'Здоровых', 'Участок', 'Дней на участке', 'Площадь, га']) gh.appendChild(el('th', { text: c }));
+        gtable.appendChild(el('thead', {}, [gh]));
+        const gb = el('tbody');
+        for (const g of (herd.groups || [])) {
+            const tr = el('tr');
+            tr.appendChild(el('td', { text: g.name || ('#' + g.id) }));
+            tr.appendChild(el('td', { class: 'num', text: humanNumber(g.animals) }));
+            tr.appendChild(el('td', { class: 'num', text: humanNumber(g.healthy) }));
+            tr.appendChild(el('td', { text: g.plot_no ? g.plot_no + (g.plot_name ? ' · ' + g.plot_name : '') : '—' }));
+            tr.appendChild(el('td', { class: 'num', text: g.days_on_plot === null || g.days_on_plot === undefined ? '—' : String(g.days_on_plot) }));
+            tr.appendChild(el('td', { class: 'num', text: g.area_ha === null || g.area_ha === undefined ? '—' : String(g.area_ha) }));
+            gb.appendChild(tr);
+        }
+        if (!(herd.groups || []).length) gb.appendChild(el('tr', {}, [el('td', { colspan: '6', text: t('empty') })]));
+        gtable.appendChild(gb);
+        gwrap.appendChild(gtable);
+        groupsBox.appendChild(gwrap);
+        holder.appendChild(groupsBox);
+
+        if ((herd.unassigned || []).length) {
+            const unBox = panel('Животные без закрепления');
+            const list = el('div', { class: 'chip-list' });
+            for (const a of (herd.unassigned || []).slice(0, 24)) {
+                list.appendChild(el('span', { class: 'chip', text: `${a.inventory_number}${a.group_name ? ' · ' + a.group_name : ''}` }));
+            }
+            if (herd.unassigned.length > 24) list.appendChild(el('span', { class: 'chip', text: `и ещё ${herd.unassigned.length - 24}` }));
+            unBox.appendChild(list);
+            holder.appendChild(unBox);
+        }
+
+        if ((herd.employees || []).length) {
+            const empBox = panel('Кто за кем смотрит');
+            const list = el('div', { class: 'chip-list' });
+            for (const e of (herd.employees || []).slice(0, 16)) {
+                list.appendChild(el('span', { class: 'chip', text: `${e.full_name} · ${e.assigned} гол.` }));
+            }
+            empBox.appendChild(list);
+            holder.appendChild(empBox);
+        }
+    }
+
     holder.appendChild(el('p', { class: 'notice', text: t('grazing.note') + '. ' + t('grazing.derived') + '.' }));
     renderTable(Object.assign({}, page, { crud: null, rowActions: [] }), result.rows, t('grazing.note'));
     holder.appendChild(el('button', {
@@ -1873,8 +3185,8 @@ function openCreate() {
     });
 }
 
-function openEdit(row) {
-    const page = currentPage();
+function openEdit(row, pageArg) {
+    const page = pageArg || currentPage();
     if (!page || !page.crud || !hasPerm(page.writePerm)) return;
     const fields = page.crud.editFields;
     if (!fields || !fields.length) { toast(t('err.403'), 'warn'); return; }
@@ -1953,12 +3265,15 @@ function openAnimalStatus(row) {
     if (!hasPerm('animal:WRITE')) { toast(t('err.403'), 'warn'); return; }
     openModal({
         title: t('animal.status') + ' · ' + (row.inventory_number || row.id),
+        note: 'Для статусов «ПРОДАН», «ПАДЁЖ», «ВЫБРАКОВАНО» укажите причину выбытия — закрепления за животным закроются автоматически.',
         fields: [
             F('status', 'select', { required: true, options: staticOpts(ANIMAL_STATUSES) }),
             F('reason', 'textarea', { required: true, span: true }),
-            F('diagnosis_id', 'number'), F('drug_nomenclature_id', 'number'),
-            F('dosage', 'number', { step: '0.001' }), F('disposal_reason_id', 'number')
+            F('disposal_reason_id', 'select', { optionsFrom: '/disposal-reasons' }),
+            F('diagnosis_id', 'select', { optionsFrom: '/diagnoses' }),
+            F('drug_nomenclature_id', 'number'), F('dosage', 'number', { step: '0.001' })
         ],
+        values: { status: row.status },
         onSubmit: async (payload, reason) => {
             await mutation('POST', '/animals/' + row.id + '/status', payload, reason, 'done');
         }
@@ -2011,6 +3326,202 @@ function openResetPassword(row) {
     });
 }
 
+/* ---- Пользователи: блокировка, пароль, сессии ---- */
+function openUserBlock(row) {
+    openModal({
+        title: 'Блокировка · ' + row.login,
+        note: 'Блокировка отзывает все активные сессии учётной записи. Причина обязательна и попадёт в аудит.',
+        danger: true, submitLabel: 'Заблокировать',
+        fields: [F('reason', 'textarea', { required: true, span: true })],
+        onSubmit: async (payload, reason) => {
+            await mutation('POST', `/admin/users/${row.id}/block`, { reason: payload.reason }, reason, 'done');
+        }
+    });
+}
+
+function openUserUnblock(row) {
+    openModal({
+        title: 'Разблокировка · ' + row.login,
+        note: row.blocked_reason ? 'Причина блокировки: ' + row.blocked_reason : 'Учётная запись будет снова доступна для входа.',
+        fields: [F('reason', 'textarea', { required: true, span: true })],
+        onSubmit: async (payload, reason) => {
+            await mutation('POST', `/admin/users/${row.id}/unblock`, { reason: payload.reason }, reason, 'done');
+        }
+    });
+}
+
+async function generateUserPassword(row) {
+    try {
+        const res = await api('POST', `/admin/users/${row.id}/generate-password`, {}, { silent: true });
+        const pwd = (res && res.data && res.data.password) || '';
+        openModal({
+            title: 'Временный пароль · ' + row.login,
+            note: 'Пароль показывается один раз и не сохраняется в журнале. Передайте его сотруднику безопасным каналом: при входе потребуется смена.',
+            fields: [F('password', 'text', { readonly: true })],
+            values: { password: pwd },
+            submitLabel: t('help.ok'),
+            onSubmit: async () => { /* просто закрыть */ }
+        });
+    } catch (err) { toast(err.message, 'err'); }
+}
+
+async function openUserSessions(row) {
+    let rows = [];
+    try {
+        const res = await api('GET', `/admin/users/${row.id}/sessions`, undefined, { silent: true });
+        rows = Array.isArray(res && res.data) ? res.data : [];
+    } catch (err) { toast(err.message, 'err'); return; }
+    const lines = rows.length
+        ? rows.map((s) => `#${s.id} · ${s.ip || '—'} · вход ${formatDate(s.issued_at)} · до ${formatDate(s.expires_at)}`)
+        : ['Активных сессий нет.'];
+    openModal({
+        title: 'Сессии · ' + row.login,
+        note: lines.join('\n'),
+        fields: [],
+        danger: rows.length > 0,
+        submitLabel: rows.length && hasPerm('user:WRITE') ? 'Отозвать все сессии' : t('help.ok'),
+        onSubmit: async (payload, reason) => {
+            if (!rows.length || !hasPerm('user:WRITE')) return;
+            await mutation('POST', `/admin/users/${row.id}/revoke-sessions`, {}, reason, 'done');
+        }
+    });
+}
+
+/* ---- Роли: матрица прав ---- */
+async function openRolePermissions(row) {
+    let data;
+    try {
+        const res = await api('GET', `/admin/roles/${row.id}/permissions`, undefined, { silent: true });
+        data = (res && res.data) || {};
+    } catch (err) { toast(err.message, 'err'); return; }
+    const all = data.all || [];
+    const granted = new Set((data.granted || []).map(Number));
+    const fields = all.map((p) => F('perm_' + p.id, 'checkbox', { label: p.code, hint: p.description || '' }));
+    const values = {};
+    for (const p of all) values['perm_' + p.id] = granted.has(Number(p.id));
+    openModal({
+        title: 'Права роли · ' + (row.code || row.name || row.id),
+        note: 'Отметьте разрешения роли. Для DBA допустимо только чтение бизнес-объектов и полные права на user/tech/dba/backup.',
+        fields,
+        values,
+        submitLabel: t('save'),
+        onSubmit: async (payload, reason) => {
+            const ids = Object.keys(payload)
+                .filter((k) => k.startsWith('perm_') && payload[k])
+                .map((k) => Number(k.slice(5)))
+                .filter((n) => Number.isFinite(n));
+            await api('PUT', `/admin/roles/${row.id}/permissions`, { permission_ids: ids, reason: reason || null });
+            toast(t('saved'), 'ok');
+            await loadPage();
+        }
+    });
+}
+
+/* ---- Сотрудники: ПДн, увольнение, восстановление, закрепления ---- */
+async function openEmployeePii(row) {
+    if (!hasPerm('employee:PII')) { toast(t('err.403'), 'warn'); return; }
+    let values = {};
+    try {
+        const res = await api('GET', `/employees/${row.id}/pii`, undefined, { silent: true });
+        values = (res && res.data && res.data.values) || {};
+    } catch (err) {
+        if (!err || err.status !== 404) { toast(err.message, 'err'); return; }
+    }
+    const fields = [
+        F('phone', 'text', { nullable: true }),
+        F('passport', 'text', { nullable: true }),
+        F('address', 'text', { nullable: true, span: true }),
+        F('snils', 'text', { nullable: true }),
+        F('inn', 'text', { nullable: true }),
+        F('bank_account', 'text', { nullable: true }),
+        F('emergency_contact', 'text', { nullable: true, span: true })
+    ];
+    openModal({
+        title: 'Персональные данные · ' + row.full_name,
+        note: 'ПДн хранятся в БД в зашифрованном виде (pgcrypto, ключ только в окружении сервера). Каждое чтение пишется в аудит как READ_PII.',
+        fields,
+        values,
+        onSubmit: async (payload, reason) => {
+            if (!Object.keys(payload).length) throw new Error(t('err.400'));
+            await mutation('PUT', `/employees/${row.id}/pii`, payload, reason, 'saved');
+        }
+    });
+}
+
+function openEmployeeDismiss(row) {
+    openModal({
+        title: 'Увольнение · ' + row.full_name,
+        note: 'Увольнение закрывает все закрепления за животными и блокирует связанные учётные записи с отзывом сессий. Причина обязательна.',
+        danger: true, submitLabel: 'Уволить',
+        fields: [
+            F('dismissed_at', 'date'),
+            F('dismissal_reason', 'textarea', { required: true, span: true, label: 'Причина увольнения' })
+        ],
+        onSubmit: async (payload, reason) => {
+            const body = { dismissal_reason: payload.dismissal_reason };
+            if (payload.dismissed_at) body.dismissed_at = payload.dismissed_at;
+            await mutation('POST', `/employees/${row.id}/dismiss`, body, reason, 'done');
+        }
+    });
+}
+
+function openEmployeeReinstate(row) {
+    openModal({
+        title: 'Восстановление · ' + row.full_name,
+        fields: [F('reason', 'textarea', { required: true, span: true })],
+        onSubmit: async (payload, reason) => {
+            await mutation('POST', `/employees/${row.id}/reinstate`, {}, reason, 'done');
+        }
+    });
+}
+
+function openAnimalAssign(row) {
+    openModal({
+        title: 'Закрепить сотрудника · ' + (row.inventory_number || ('#' + row.id)),
+        fields: [
+            F('employee_id', 'select', { required: true, optionsFrom: '/employees' }),
+            F('role_code', 'select', { required: true, options: fPairs(ASSIGN_ROLES) }),
+            F('note', 'text')
+        ],
+        values: { role_code: 'HERDSMAN' },
+        onSubmit: async (payload, reason) => {
+            await mutation('POST', `/animals/${row.id}/assignments`, payload, reason, 'done');
+        }
+    });
+}
+
+function openEmployeeAssign(row) {
+    openModal({
+        title: 'Закрепить животное · ' + row.full_name,
+        fields: [
+            F('animal_id', 'select', { required: true, optionsFrom: '/animals' }),
+            F('role_code', 'select', { required: true, options: fPairs(ASSIGN_ROLES) }),
+            F('note', 'text')
+        ],
+        values: { role_code: 'HERDSMAN' },
+        onSubmit: async (payload, reason) => {
+            await mutation('POST', `/employees/${row.id}/assignments`, payload, reason, 'done');
+        }
+    });
+}
+
+/** Закрепление из сводки бригадира: сотрудник + животное + роль. */
+function openAssignEmployee() {
+    openModal({
+        title: 'Закрепить сотрудника за животным',
+        fields: [
+            F('employee_id', 'select', { required: true, optionsFrom: '/employees' }),
+            F('animal_id', 'select', { required: true, optionsFrom: '/animals' }),
+            F('role_code', 'select', { required: true, options: fPairs(ASSIGN_ROLES) }),
+            F('note', 'text')
+        ],
+        values: { role_code: 'HERDSMAN' },
+        onSubmit: async (payload, reason) => {
+            await mutation('POST', `/animals/${payload.animal_id}/assignments`, payload, reason, 'done');
+        }
+    });
+}
+
 /* POST /tech/backups */
 function openBackup() {
     openModal({
@@ -2025,13 +3536,16 @@ function openBackup() {
 }
 
 /* POST /tech/restores */
-function openRestore() {
+function openRestore(backupJobId) {
     openModal({
         title: t('tech.restore'),
+        note: 'Восстановление перезаписывает текущую БД содержимым выбранной копии. Действие фиксируется в тех. логе и аудите.',
+        danger: true, submitLabel: t('tech.restore'),
         fields: [
             F('backup_job_id', 'select', { required: true, optionsFrom: '/tech/backups' }),
             F('reason', 'textarea', { required: true, span: true })
         ],
+        values: backupJobId ? { backup_job_id: backupJobId } : {},
         onSubmit: async (payload, reason) => { await mutation('POST', '/tech/restores', payload, reason, 'done'); }
     });
 }
@@ -2047,6 +3561,53 @@ function openMaintenance() {
         values: { operation: 'VACUUM' },
         onSubmit: async (payload, reason) => { await mutation('POST', '/tech/maintenance', payload, reason, 'done'); }
     });
+}
+
+/* --------------------------------------------------------------------------
+ * 10b. Администратор БД: действия миграций, копий и мониторинга.
+ * Причину X-Override-Reason api() запрашивает сам (модалка при 428).
+ * -------------------------------------------------------------------------- */
+async function dbaAction(kind) {
+    const reload = () => loadPage();
+    try {
+        let r;
+        switch (kind) {
+            case 'preflight':
+                r = await api('POST', '/dba/migrations/preflight', {});
+                toast('Dry-run: ' + ((r.data && r.data.files || []).map((f) => f.version + (f.ok ? ' OK' : ' FAIL')).join(', ') || t('done')), 'ok');
+                return;
+            case 'apply': {
+                const pending = state.data.filter((x) => x.state === 'NEW' || x.state === 'FAILED');
+                if (!pending.length) { toast(t('empty'), 'warn'); return; }
+                // Причину X-Override-Reason api() запросит сам при ответе 428
+                // и повторит запрос (см. promptOverrideReason).
+                r = await api('POST', '/dba/migrations/apply', {});
+                toast((r.data && r.data.applied || []).map((x) => x.version).join(', ') + ' · ' + t('done'), 'ok');
+                break;
+            }
+            case 'capture':
+                r = await api('POST', '/dba/monitor/capture', {});
+                toast(t('done') + ' · #' + (r.data && r.data.id), 'ok');
+                break;
+            case 'refresh':
+                r = await api('POST', '/dba/monitor/refresh-stats', { operation: 'ANALYZE' });
+                toast(t('done') + ' · ' + (r.data && r.data.duration_ms) + ' ms', 'ok');
+                break;
+            case 'backup':
+                r = await api('POST', '/dba/backups', { backup_type: 'FULL', retention_days: 30 });
+                toast(t('done') + ' · ' + (r.data && r.data.file_path || ''), 'ok');
+                break;
+            case 'rotate':
+                r = await api('POST', '/dba/backups/rotate', { retention_days: 30 });
+                toast(t('done') + ' · ' + (r.data && r.data.removed_count) + ' удалено', 'ok');
+                break;
+            default: return;
+        }
+        if (r && r.data && r.data.warning) toast(r.data.warning, 'warn');
+        reload();
+    } catch (err) {
+        toast(err && err.message ? err.message : t('err.generic'), 'warn');
+    }
 }
 
 /* --------------------------------------------------------------------------
@@ -2423,7 +3984,7 @@ async function exportPageCsv(page) {
  * 14. Горячие клавиши и события
  * -------------------------------------------------------------------------- */
 function focusSearch() {
-    const n = $('filter-search');
+    const n = $('page-tools').querySelector('input[type="search"]');
     if (!n || $('app-view').hidden) return;
     n.focus(); n.select();
 }
@@ -2461,7 +4022,7 @@ function handleKey(e) {
         return;
     }
     if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K')) {
-        e.preventDefault(); focusSearch(); return;
+        e.preventDefault(); openActionPalette(); return;
     }
     if (typing || e.ctrlKey || e.metaKey || e.altKey || !state.token) return;
 
@@ -2481,9 +4042,12 @@ function handleKey(e) {
         return;
     }
     const actions = {
-        n: () => openCreate(), r: () => loadPage(),
-        i: () => openMovement('RECEIPT'), o: () => openMovement('ISSUE'),
-        w: () => openMovement('WRITE_OFF'), a: () => openAssign(), d: () => openExecute()
+        n: () => openCreateSmart(), e: () => openEditSmart(), b: () => openBlockSmart(),
+        r: () => loadPage(),
+        i: () => hasPerm('stock:WRITE') ? openMovement('RECEIPT') : denied('stock:WRITE', 'Приход склада'),
+        o: () => hasPerm('stock:WRITE') ? openMovement('ISSUE') : denied('stock:WRITE', 'Расход склада'),
+        w: () => hasPerm('stock:DELETE') ? openMovement('WRITE_OFF') : denied('stock:DELETE', 'Списание склада'),
+        a: () => openAssign(), d: () => openExecute()
     };
     if (actions[k]) { e.preventDefault(); actions[k](); }
 }
@@ -2516,17 +4080,16 @@ function bindEvents() {
         }
     });
     $('refresh-btn').addEventListener('click', () => loadPage());
-    $('create-btn').addEventListener('click', () => openCreate());
-    $('filters-apply').addEventListener('click', applyFilters);
-    $('filters-reset').addEventListener('click', resetFilters);
-    $('filter-search').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); applyFilters(); } });
-    $('filter-search').addEventListener('input', debounce(applyFilters, 350));
-    $('filter-status').addEventListener('change', applyFilters);
-    $('filter-limit').addEventListener('change', applyFilters);
-    $('filter-from').addEventListener('change', applyFilters);
-    $('filter-to').addEventListener('change', applyFilters);
+    $('create-btn').addEventListener('click', () => {
+        if (state.createAction) state.createAction.run(); else openCreateSmart();
+    });
     $('pager-prev').addEventListener('click', () => { if (state.pageNo > 1) { state.pageNo--; state.offset = (state.pageNo - 1) * state.limit; loadPage(); } });
     $('pager-next').addEventListener('click', () => { state.pageNo++; state.offset = (state.pageNo - 1) * state.limit; loadPage(); });
+    $('pager-limit').addEventListener('change', () => {
+        state.limit = Math.min(Math.max(1, Number($('pager-limit').value) || DEFAULT_LIMIT), MAX_LIMIT);
+        state.pageNo = 1; state.offset = 0;
+        loadPage();
+    });
 
     $('map-close').addEventListener('click', () => hideMap());
     $('modal').addEventListener('click', (e) => { if (e.target.closest('[data-modal-close]')) closeModal(); });
@@ -2535,6 +4098,35 @@ function bindEvents() {
     $('help-close').addEventListener('click', closeHelp);
     $('help-ok').addEventListener('click', closeHelp);
     $('help-dialog').addEventListener('click', (e) => { if (e.target.id === 'help-dialog') closeHelp(); });
+
+    /* Универсальная палитра действий (Ctrl+K, кнопки в шапке и футере). */
+    for (const id of ['actions-btn', 'hotkeys-actions-btn']) {
+        const btn = $(id);
+        if (btn) btn.addEventListener('click', () => openActionPalette());
+    }
+    $('action-close').addEventListener('click', closeActionDialog);
+    $('action-cancel').addEventListener('click', closeActionDialog);
+    $('action-dialog').addEventListener('click', (e) => { if (e.target.id === 'action-dialog') closeActionDialog(); });
+    $('action-search').addEventListener('input', (e) => renderActionList(e.target.value));
+    $('action-entity-search').addEventListener('input', (e) => renderEntityList(e.target.value));
+    $('action-picker-back').addEventListener('click', backToActions);
+    $('action-dialog').addEventListener('keydown', (e) => {
+        if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+            e.preventDefault();
+            const picker = !$('action-step-picker').hidden;
+            if (picker) markEntity(state.entityIndex + (e.key === 'ArrowDown' ? 1 : -1));
+            else markAction(state.actionIndex + (e.key === 'ArrowDown' ? 1 : -1));
+        } else if (e.key === 'Enter') {
+            e.preventDefault();
+            if (!$('action-step-picker').hidden) {
+                const row = state.entityVisible && state.entityVisible[state.entityIndex];
+                if (row && state.actionCurrent) { closeActionDialog(); state.actionCurrent.run(row); }
+            } else {
+                const a = state.actionVisible && state.actionVisible[state.actionIndex];
+                if (a) runAction(a);
+            }
+        }
+    });
 
     window.addEventListener('hashchange', route);
     document.addEventListener('keydown', handleKey);

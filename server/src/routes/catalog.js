@@ -225,17 +225,8 @@ const catalogs = [
           code: { type: 'string', required: true, max: 24, pattern: /^[A-Za-z0-9_-]{1,24}$/ },
           name: { type: 'string', required: true, max: 80 },
       } },
-    { path: '/employees', table: 'employee', label: 'сотрудник', read: 'employee:READ', write: 'employee:WRITE',
-      softDelete: 'is_deleted',
-      search: ['full_name', 'phone'], sortable: new Set(['id', 'full_name', 'hire_date', 'is_active']), defaultSort: 'full_name',
-      fields: {
-          full_name: { type: 'string', required: true, max: 120 },
-          position_id: { type: 'int', required: true },
-          phone: { type: 'string', max: 24, nullable: true },
-          hire_date: { type: 'date', maxToday: true },
-          is_active: { type: 'boolean' },
-      },
-      fks: [{ field: 'position_id', table: 'position', label: 'Должность' }] },
+    // Сотрудники вынесены в routes/employees.js: у них появились ПДн (шифрование),
+    // увольнение с причиной и закрепления за животными — CRUD-фабрике это не по силам.
     { path: '/diagnoses', table: 'diagnosis', label: 'диагноз', read: 'catalog:READ', write: 'catalog:WRITE',
       fields: {
           code: { type: 'string', required: true, max: 24, pattern: /^[A-Za-z0-9_-]{1,24}$/ },
@@ -263,7 +254,7 @@ const catalogs = [
       fields: {
           code: { type: 'string', required: true, max: 24, pattern: /^[A-Za-z0-9_-]{1,24}$/ },
           name: { type: 'string', required: true, max: 120 },
-          reason_type: { type: 'enum', required: true, values: ['CULLING', 'DEATH'] },
+          reason_type: { type: 'enum', required: true, values: ['CULLING', 'DEATH', 'SALE'] },
       } },
     { path: '/task-types', table: 'task_type', label: 'тип задачи', read: 'catalog:READ', write: 'catalog:WRITE',
       fields: {

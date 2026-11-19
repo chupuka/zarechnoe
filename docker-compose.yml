@@ -33,6 +33,12 @@ services:
       PGDATABASE: farm
       REPORTS_HOST: reports
       REPORTS_PORT: 4000
+      # Ключ шифрования ПДн сотрудников (ТЗ п.7). В БД не хранится — только здесь.
+      # Для стенда используется демо-ключ; в эксплуатации задаётся через .env/секрет.
+      PII_KEY: ${PII_KEY:-zarechnoe-pii-key-2026-demo-32chars-min}
+      # Планировщик резервного копирования (проверка расписания раз в минуту)
+      BACKUP_SCHEDULER: ${BACKUP_SCHEDULER:-on}
+      BACKUP_TICK_MS: ${BACKUP_TICK_MS:-60000}
     ports:
       - "3000:3000"
     depends_on:

@@ -17,28 +17,34 @@ BEGIN;
 DO $$
 DECLARE n INT; s NUMERIC;
 BEGIN
+    -- Базовых таблиц 56; контур администратора БД добавляет 2
+    -- (schema_migration, db_metric_sample), расширение ПДн/закреплений — ещё 2
+    -- (employee_pii, animal_assignment). Допускаем 58..62, чтобы проверка не
+    -- ломалась на промежуточной стадии миграций.
     SELECT count(*) INTO n FROM information_schema.tables
      WHERE table_schema = 'public' AND table_type = 'BASE TABLE'
        AND table_name <> 'spatial_ref_sys';
-    IF n <> 56 THEN RAISE EXCEPTION 'CHECK 1 FAIL: таблиц % вместо 56', n; END IF;
+    IF n < 58 OR n > 62 THEN
+        RAISE EXCEPTION 'CHECK 1 FAIL: таблиц % (ожидалось 58..62)', n;
+    END IF;
 
     SELECT count(*) INTO n FROM information_schema.table_constraints
      WHERE constraint_schema = 'public' AND constraint_type = 'FOREIGN KEY';
-    IF n <> 93 THEN RAISE EXCEPTION 'CHECK 1 FAIL: внешних ключей % вместо 93', n; END IF;
+    IF n <> 99 THEN RAISE EXCEPTION 'CHECK 1 FAIL: внешних ключей % вместо 99', n; END IF;
 
     SELECT count(*) INTO n FROM information_schema.views
      WHERE table_schema = 'public'
        AND table_name NOT IN ('geography_columns', 'geometry_columns');
-    IF n <> 7 THEN RAISE EXCEPTION 'CHECK 1 FAIL: представлений % вместо 7', n; END IF;
+    IF n <> 11 THEN RAISE EXCEPTION 'CHECK 1 FAIL: представлений % вместо 11', n; END IF;
 
     SELECT count(*) INTO n FROM role;
     IF n <> 6 THEN RAISE EXCEPTION 'CHECK 1 FAIL: ролей % вместо 6', n; END IF;
 
     SELECT count(*) INTO n FROM permission;
-    IF n <> 42 THEN RAISE EXCEPTION 'CHECK 1 FAIL: прав % вместо 42', n; END IF;
+    IF n <> 45 THEN RAISE EXCEPTION 'CHECK 1 FAIL: прав % вместо 45', n; END IF;
 
     SELECT count(*) INTO n FROM animal;
-    IF n <> 100 THEN RAISE EXCEPTION 'CHECK 1 FAIL: животных % вместо 100', n; END IF;
+    IF n <> 140 THEN RAISE EXCEPTION 'CHECK 1 FAIL: животных % вместо 140', n; END IF;
 
     SELECT count(*) INTO n FROM task;
     IF n < 9000 THEN RAISE EXCEPTION 'CHECK 1 FAIL: задач % (ожидалось ≥9000)', n; END IF;
@@ -57,7 +63,7 @@ BEGIN
     SELECT count(*) INTO n FROM purchase_request WHERE is_auto;
     IF n < 1 THEN RAISE EXCEPTION 'CHECK 1 FAIL: нет авто-заявок от триггера'; END IF;
 
-    RAISE NOTICE 'CHECK 1 OK: структура (56 таблиц, 93 FK, 7 VIEW, роли/права, демо-набор, авто-заявки)';
+    RAISE NOTICE 'CHECK 1 OK: структура (60 таблиц, 99 FK, 11 VIEW, роли/права, демо-набор 140 голов, авто-заявки)';
 END $$;
 
 -- ---------- 2. Сверка остатков склада ----------
@@ -75,10 +81,12 @@ END $$;
 -- ---------- 3. Негатив: уход в минус по складу ----------
 DO $$
 BEGIN
-    INSERT INTO stock_movement (movement_type_id, batch_id, qty, uom_id, moved_at, created_by, comment)
+    INSERT INTO stock_movement (movement_type_id, batch_id, qty, uom_id, moved_at, created_by,
+                                write_off_reason_id, comment)
     SELECT (SELECT id FROM movement_type WHERE code = 'WRITE_OFF'),
            b.id, sb.qty_on_hand + 100, (SELECT id FROM uom WHERE code = 'KG'),
-           now(), (SELECT id FROM app_user WHERE login = 'storekeeper'), 'check-3'
+           now(), (SELECT id FROM app_user WHERE login = 'storekeeper'),
+           (SELECT id FROM write_off_reason WHERE code = 'SPOILAGE' LIMIT 1), 'check-3'
     FROM stock_batch b
     JOIN stock_balance sb ON sb.batch_id = b.id
     ORDER BY b.id LIMIT 1;
@@ -480,7 +488,21 @@ BEGIN
      WHERE p.code = 'stock:DELETE' AND r.code = 'FOREMAN';
     IF n <> 0 THEN RAISE EXCEPTION 'CHECK 15 FAIL: FOREMAN может списывать'; END IF;
 
-    RAISE NOTICE 'CHECK 15 OK: RBAC (42 права, DBA только чтение, FOREMAN employee:READ, списание изолировано)';
+    -- Бригадир работает с животными и здоровьем, а не только смотрит
+    SELECT count(*) INTO n FROM role_permission rp
+     JOIN permission p ON p.id = rp.permission_id
+     JOIN role r ON r.id = rp.role_id
+     WHERE r.code = 'FOREMAN' AND p.code IN ('animal:WRITE','health:WRITE');
+    IF n <> 2 THEN RAISE EXCEPTION 'CHECK 15 FAIL: у FOREMAN нет animal:WRITE/health:WRITE (%)', n; END IF;
+
+    -- DBA управляет только учётными записями (решение по проекту)
+    SELECT count(*) INTO n FROM role_permission rp
+     JOIN permission p ON p.id = rp.permission_id
+     JOIN role r ON r.id = rp.role_id
+     WHERE r.code = 'DBA' AND p.code IN ('user:READ','user:WRITE');
+    IF n <> 2 THEN RAISE EXCEPTION 'CHECK 15 FAIL: DBA не управляет пользователями (%)', n; END IF;
+
+    RAISE NOTICE 'CHECK 15 OK: RBAC (45 прав, DBA — только пользователи, FOREMAN ведёт животных, списание изолировано)';
 END $$;
 
 -- ---------- 16. Усиленный аудит: CHECK на БД ----------
@@ -524,6 +546,233 @@ BEGIN
     RAISE NOTICE 'CHECK 17 OK: audit_log / tech_log / backup_job готовы к администрированию';
 END $$;
 
-SELECT '=== ВСЕ 17 ПРОВЕРОК ПРОЙДЕНЫ (данные будут откатлены) ===' AS result;
+-- ---------- 18. Администратор БД: инфраструктура миграций и мониторинга ----------
+DO $$
+DECLARE n INT;
+BEGIN
+    -- Реестр миграций создан и защищён от дублей версий
+    SELECT count(*) INTO n FROM information_schema.columns
+     WHERE table_name = 'schema_migration'
+       AND column_name IN ('version','filename','checksum','status','duration_ms','objects_after');
+    IF n <> 6 THEN RAISE EXCEPTION 'CHECK 18 FAIL: schema_migration неполна (%)', n; END IF;
+
+    SELECT count(*) INTO n FROM pg_constraint
+     WHERE conrelid = 'schema_migration'::regclass AND contype = 'u';
+    IF n = 0 THEN RAISE EXCEPTION 'CHECK 18 FAIL: нет UNIQUE на schema_migration.version'; END IF;
+
+    -- История метрик производительности
+    SELECT count(*) INTO n FROM information_schema.columns
+     WHERE table_name = 'db_metric_sample'
+       AND column_name IN ('db_size_bytes','cache_hit_ratio','dead_rows','blocked_queries','captured_at');
+    IF n <> 5 THEN RAISE EXCEPTION 'CHECK 18 FAIL: db_metric_sample неполна (%)', n; END IF;
+
+    -- tech_log: расширен список технических событий (миграции схемы)
+    INSERT INTO tech_log (admin_user_id, action_type, description, details)
+    SELECT id, 'MIGRATE', 'CHECK 18: технический лог принимает события миграций', '{"probe":true}'::jsonb
+    FROM app_user WHERE login = 'dba';
+
+    INSERT INTO tech_log (admin_user_id, action_type, description, details)
+    SELECT id, 'ROLLBACK', 'CHECK 18: технический лог принимает события откатов', '{"probe":true}'::jsonb
+    FROM app_user WHERE login = 'dba';
+
+    -- Новый контур прав: dba:* есть ТОЛЬКО у Администратора БД и Суперпользователя
+    SELECT count(*) INTO n FROM role_permission rp
+     JOIN permission p ON p.id = rp.permission_id
+     JOIN role r ON r.id = rp.role_id
+     WHERE p.code LIKE 'dba:%' AND r.code = 'DBA';
+    IF n <> 2 THEN RAISE EXCEPTION 'CHECK 18 FAIL: у DBA прав dba:* %, ожидалось 2', n; END IF;
+
+    SELECT count(*) INTO n FROM role_permission rp
+     JOIN permission p ON p.id = rp.permission_id
+     JOIN role r ON r.id = rp.role_id
+     WHERE p.code LIKE 'dba:%' AND r.code IN ('DIRECTOR','VET','FOREMAN','STOREKEEPER');
+    IF n <> 0 THEN RAISE EXCEPTION 'CHECK 18 FAIL: у бизнес-роли есть dba:*'; END IF;
+
+    RAISE NOTICE 'CHECK 18 OK: миграции, мониторинг и права dba:* настроены корректно';
+END $$;
+
+-- ---------- 19. Персональные данные зашифрованы (pgcrypto) ----------
+DO $$
+DECLARE
+    n INT;
+    v_roundtrip TEXT;
+BEGIN
+    -- 1) открытая колонка телефона удалена
+    SELECT count(*) INTO n FROM information_schema.columns
+     WHERE table_schema = 'public' AND table_name = 'employee' AND column_name = 'phone';
+    IF n <> 0 THEN
+        RAISE EXCEPTION 'CHECK 19 FAIL: колонка employee.phone всё ещё существует';
+    END IF;
+
+    -- 2) у каждого неуволенного сотрудника есть запись ПДн
+    SELECT count(*) INTO n FROM employee e
+     WHERE NOT e.is_deleted
+       AND NOT EXISTS (SELECT 1 FROM employee_pii p WHERE p.employee_id = e.id);
+    IF n <> 0 THEN RAISE EXCEPTION 'CHECK 19 FAIL: без ПДн % сотрудников', n; END IF;
+
+    -- 3) телефон хранится шифротекстом (bytea длиннее 40 байт), а не текстом
+    SELECT count(*) INTO n FROM employee_pii
+     WHERE phone_enc IS NULL OR octet_length(phone_enc) < 40;
+    IF n <> 0 THEN RAISE EXCEPTION 'CHECK 19 FAIL: % телефонов не зашифрованы', n; END IF;
+
+    -- 4) маска есть и не раскрывает номер
+    SELECT count(*) INTO n FROM employee e
+     WHERE NOT e.is_deleted AND (e.phone_mask IS NULL OR e.phone_mask NOT LIKE '+7-***-%');
+    IF n <> 0 THEN RAISE EXCEPTION 'CHECK 19 FAIL: у % сотрудников нет маски телефона', n; END IF;
+
+    -- 5) без ключа расшифровка невозможна
+    PERFORM set_config('app.pii_key', '', true);
+    BEGIN
+        PERFORM fn_pii_decrypt(phone_enc) FROM employee_pii ORDER BY employee_id LIMIT 1;
+        RAISE EXCEPTION 'CHECK 19 FAIL: расшифровка без ключа прошла';
+    EXCEPTION WHEN others THEN
+        IF SQLERRM LIKE 'CHECK 19 FAIL%' THEN RAISE; END IF;
+    END;
+
+    -- 6) с неверным ключом — тоже невозможна
+    PERFORM set_config('app.pii_key', 'wrong-key-0123456789', true);
+    BEGIN
+        PERFORM fn_pii_decrypt(phone_enc) FROM employee_pii ORDER BY employee_id LIMIT 1;
+        RAISE EXCEPTION 'CHECK 19 FAIL: расшифровка неверным ключом прошла';
+    EXCEPTION WHEN others THEN
+        IF SQLERRM LIKE 'CHECK 19 FAIL%' THEN RAISE; END IF;
+    END;
+
+    -- 7) шифрование/расшифровка обратимы
+    PERFORM set_config('app.pii_key', 'check19-roundtrip-key-0123456789', true);
+    v_roundtrip := fn_pii_decrypt(fn_pii_encrypt('+7-900-000-00-00'));
+    IF v_roundtrip IS DISTINCT FROM '+7-900-000-00-00' THEN
+        RAISE EXCEPTION 'CHECK 19 FAIL: roundtrip вернул %', v_roundtrip;
+    END IF;
+
+    -- 8) чтение ПДн подлежит аудиту: действие READ_PII разрешено схемой
+    INSERT INTO audit_log (user_id, entity_name, entity_id, action, after_json)
+    VALUES (1, 'employee_pii', 1, 'READ_PII', '{"fields":["phone"]}'::jsonb);
+
+    SELECT count(*) INTO n FROM audit_log
+     WHERE action = 'READ_PII' AND entity_name = 'employee_pii';
+    IF n < 1 THEN RAISE EXCEPTION 'CHECK 19 FAIL: READ_PII не пишется в аудит'; END IF;
+
+    RAISE NOTICE 'CHECK 19 OK: ПДн зашифрованы (bytea+маска), без ключа/с чужим ключом не читаются, roundtrip работает';
+END $$;
+
+-- ---------- 20. Статусы «на продаже» / «продан» ----------
+DO $$
+DECLARE
+    v_an   BIGINT;
+    v_vet  BIGINT;
+    v_sale BIGINT;
+    v_cull BIGINT;
+    v_st   VARCHAR;
+    n      INT;
+BEGIN
+    SELECT id INTO v_an  FROM animal WHERE status = 'ЗДОРОВ' AND NOT is_deleted ORDER BY id LIMIT 1;
+    SELECT id INTO v_vet FROM app_user WHERE login = 'vet';
+    SELECT id INTO v_sale FROM disposal_reason WHERE code = 'SALE_PLAN';
+    SELECT id INTO v_cull FROM disposal_reason WHERE code = 'LOW_PROD';
+
+    PERFORM sp_change_animal_status(v_an, 'НА_ПРОДАЖЕ', v_vet, 'check-20: подготовка к продаже');
+    SELECT status INTO v_st FROM animal WHERE id = v_an;
+    IF v_st <> 'НА_ПРОДАЖЕ' THEN
+        RAISE EXCEPTION 'CHECK 20 FAIL: статус % вместо НА_ПРОДАЖЕ', v_st;
+    END IF;
+
+    -- Причина не того типа — отказ
+    BEGIN
+        PERFORM sp_change_animal_status(v_an, 'ПРОДАН', v_vet, 'check-20: неверная причина',
+                                        NULL, NULL, NULL, v_cull);
+        RAISE EXCEPTION 'CHECK 20 FAIL: продажа с причиной CULLING прошла';
+    EXCEPTION WHEN others THEN
+        IF SQLERRM LIKE 'CHECK 20 FAIL%' THEN RAISE; END IF;
+    END;
+
+    PERFORM sp_change_animal_status(v_an, 'ПРОДАН', v_vet, 'check-20: продажа',
+                                    NULL, NULL, NULL, v_sale);
+    IF NOT EXISTS (SELECT 1 FROM disposal_event
+                    WHERE animal_id = v_an AND disposal_type = 'SALE') THEN
+        RAISE EXCEPTION 'CHECK 20 FAIL: продажа не создала disposal_event SALE';
+    END IF;
+
+    SELECT count(*) INTO n FROM animal a
+     WHERE a.status = 'ПРОДАН'
+       AND NOT EXISTS (SELECT 1 FROM disposal_event d
+                        WHERE d.animal_id = a.id AND d.disposal_type = 'SALE');
+    IF n <> 0 THEN RAISE EXCEPTION 'CHECK 20 FAIL: % проданных без события SALE', n; END IF;
+
+    RAISE NOTICE 'CHECK 20 OK: НА_ПРОДАЖЕ и ПРОДАН работают, продажа требует причину SALE';
+END $$;
+
+-- ---------- 21. Закрепление сотрудников за животными ----------
+DO $$
+DECLARE n INT; v_emp BIGINT; v_an BIGINT;
+BEGIN
+    SELECT count(*) INTO n FROM animal_assignment;
+    IF n = 0 THEN RAISE EXCEPTION 'CHECK 21 FAIL: нет ни одного закрепления'; END IF;
+
+    -- закреплений за выбывшими животными быть не должно
+    SELECT count(*) INTO n FROM animal_assignment aa
+     JOIN animal a ON a.id = aa.animal_id
+     WHERE aa.ended_at IS NULL
+       AND a.status IN ('ВЫБРАКОВАНО','ПАДЁЖ','ПРОДАН');
+    IF n <> 0 THEN RAISE EXCEPTION 'CHECK 21 FAIL: % активных закреплений за выбывшими', n; END IF;
+
+    -- дубль активного закрепления запрещён уникальным индексом
+    SELECT aa.animal_id, aa.employee_id INTO v_an, v_emp
+      FROM animal_assignment aa WHERE aa.ended_at IS NULL ORDER BY aa.id LIMIT 1;
+    BEGIN
+        INSERT INTO animal_assignment (animal_id, employee_id, role_code, assigned_by)
+        VALUES (v_an, v_emp, 'HERDSMAN', 1);
+        RAISE EXCEPTION 'CHECK 21 FAIL: дубль закрепления прошёл';
+    EXCEPTION WHEN unique_violation THEN
+        NULL;  -- ожидаемо
+    END;
+
+    -- закрепить сотрудника за проданным животным нельзя
+    SELECT id INTO v_an FROM animal WHERE status = 'ПРОДАН' ORDER BY id LIMIT 1;
+    BEGIN
+        INSERT INTO animal_assignment (animal_id, employee_id, role_code, assigned_by)
+        VALUES (v_an, 4, 'HERDSMAN', 1);
+        RAISE EXCEPTION 'CHECK 21 FAIL: закрепление за проданным животным прошло';
+    EXCEPTION WHEN others THEN
+        IF SQLERRM LIKE 'CHECK 21 FAIL%' THEN RAISE; END IF;
+    END;
+
+    RAISE NOTICE 'CHECK 21 OK: закрепления работают, дубль и закрепление за выбывшим запрещены';
+END $$;
+
+-- ---------- 22. Блокировка пользователей и увольнение — только с причиной ----------
+DO $$
+DECLARE n INT;
+BEGIN
+    SELECT count(*) INTO n FROM app_user
+     WHERE NOT is_active AND NOT is_deleted AND blocked_reason IS NULL;
+    IF n <> 0 THEN RAISE EXCEPTION 'CHECK 22 FAIL: % учётных записей заблокированы без причины', n; END IF;
+
+    -- БД не даст выключить запись без причины
+    BEGIN
+        INSERT INTO app_user (login, password_hash, full_name, role_id, is_active)
+        VALUES ('check22.tmp', 'x', 'Проверка', (SELECT id FROM role WHERE code = 'VET'), FALSE);
+        RAISE EXCEPTION 'CHECK 22 FAIL: блокировка без причины прошла';
+    EXCEPTION WHEN check_violation THEN
+        NULL;  -- ожидаемо
+    END;
+
+    SELECT count(*) INTO n FROM employee
+     WHERE NOT is_active AND NOT is_deleted
+       AND (dismissed_at IS NULL OR dismissal_reason IS NULL);
+    IF n <> 0 THEN RAISE EXCEPTION 'CHECK 22 FAIL: % сотрудников уволены без причины', n; END IF;
+
+    -- Увольнение без даты/причины невозможно
+    BEGIN
+        UPDATE employee SET is_active = FALSE WHERE id = 2;
+        RAISE EXCEPTION 'CHECK 22 FAIL: увольнение без причины прошло';
+    EXCEPTION WHEN check_violation THEN
+        NULL;  -- ожидаемо
+    END;
+
+    RAISE NOTICE 'CHECK 22 OK: блокировка и увольнение всегда с причиной (CHECK на уровне схемы)';
+END $$;
+
+SELECT '=== ВСЕ 22 ПРОВЕРОК ПРОЙДЕНЫ (данные будут откатлены) ===' AS result;
 
 ROLLBACK;

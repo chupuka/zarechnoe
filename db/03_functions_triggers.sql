@@ -150,3 +150,129 @@ CREATE TRIGGER trg_auto_purchase_request
 
 COMMENT ON FUNCTION fn_auto_purchase_request() IS
     'Триггер: при падении остатка ниже min_threshold автоматически создаётся заявка на закупку кладовщику (is_auto) + уведомление';
+
+-- =============================================================================
+-- Дополнительные триггеры серверных бизнес-правил ТЗ (дописаны 10.11.2026).
+-- Выполняются в этом же файле, ПОСЛЕ 02_views.sql и ДО 04_seed_demo.sql.
+-- Все идемпотентны (DROP TRIGGER IF EXISTS) и не ломают существующие данные:
+--   * WRITE_OFF в seed и в 99_checks.sql всегда идёт с write_off_reason_id;
+--   * treatment в seed приходит с готовым withdrawal_until;
+--   * смена статуса животного идёт через sp_change_animal_status (05_procedures.sql),
+--     которая заранее создаёт examination / disposal_event и пишет audit_log.
+-- =============================================================================
+
+-- 5.5 Списание со склада — только с указанной причиной (ТЗ п.3.3 / п.4.3)
+--     «Любое списание - с причиной и правом соответствующей роли».
+--     Право проверяется на сервере (stock:DELETE), здесь страхуется сам факт.
+CREATE OR REPLACE FUNCTION fn_stock_writeoff_reason_check() RETURNS TRIGGER AS $$
+DECLARE
+    v_code VARCHAR(32);
+BEGIN
+    SELECT code INTO v_code FROM movement_type WHERE id = NEW.movement_type_id;
+    IF v_code = 'WRITE_OFF' AND NEW.write_off_reason_id IS NULL THEN
+        RAISE EXCEPTION 'Списание со склада требует указания причины (write_off_reason_id)';
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_stock_movement_writeoff_reason ON stock_movement;
+CREATE TRIGGER trg_stock_movement_writeoff_reason
+    BEFORE INSERT OR UPDATE OF write_off_reason_id ON stock_movement
+    FOR EACH ROW EXECUTE FUNCTION fn_stock_writeoff_reason_check();
+
+COMMENT ON FUNCTION fn_stock_writeoff_reason_check() IS
+    'Триггер: запрещает списание (WRITE_OFF) без причины из справочника write_off_reason';
+
+-- 5.6 Срок ожидания (withdrawal period) запоминается автоматически (ТЗ п.3.2.4)
+--     «система запоминает дату окончания срока» — даже если назначение лечения
+--     вставлено напрямую в БД, а не через sp_change_animal_status.
+CREATE OR REPLACE FUNCTION fn_treatment_withdrawal_apply() RETURNS TRIGGER AS $$
+DECLARE
+    v_days INT;
+BEGIN
+    IF NEW.withdrawal_until IS NULL THEN
+        SELECT d.withdrawal_days INTO v_days
+        FROM drug d WHERE d.nomenclature_id = NEW.nomenclature_id;
+        IF COALESCE(v_days, 0) > 0 THEN
+            NEW.withdrawal_until := COALESCE(NEW.started_at, now())::date + v_days;
+        END IF;
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_treatment_withdrawal ON treatment;
+CREATE TRIGGER trg_treatment_withdrawal
+    BEFORE INSERT OR UPDATE OF nomenclature_id, started_at ON treatment
+    FOR EACH ROW EXECUTE FUNCTION fn_treatment_withdrawal_apply();
+
+COMMENT ON FUNCTION fn_treatment_withdrawal_apply() IS
+    'Триггер: автозаполнение treatment.withdrawal_until по справочнику drug.withdrawal_days';
+
+-- 5.7 Регламент статус-флоу животного (ТЗ п.3.2 / п.4.4)
+--     «Перевод статуса животного - только по регламенту, всё логируется».
+--     Прямые UPDATE animal.status в обход процедуры запрещены; смена технических
+--     полей (is_deleted, group_id) триггер не затрагивает (UPDATE OF status).
+--     Процедура sp_change_animal_status дополнительно пишет audit_log.
+CREATE OR REPLACE FUNCTION fn_animal_status_flow_check() RETURNS TRIGGER AS $$
+DECLARE
+    v_allowed BOOLEAN;
+BEGIN
+    IF NEW.status IS NOT DISTINCT FROM OLD.status THEN
+        RETURN NEW;
+    END IF;
+
+    v_allowed := CASE OLD.status
+        WHEN 'ЗДОРОВ'       THEN NEW.status IN ('НА_ОСМОТРЕ','НА_КАРАНТИНЕ','НА_ЛЕЧЕНИИ','ВЫБРАКОВАНО','ПАДЁЖ')
+        WHEN 'НА_ОСМОТРЕ'   THEN NEW.status IN ('ЗДОРОВ','НА_КАРАНТИНЕ','НА_ЛЕЧЕНИИ','ВЫБРАКОВАНО','ПАДЁЖ')
+        WHEN 'НА_КАРАНТИНЕ' THEN NEW.status IN ('ЗДОРОВ','НА_ОСМОТРЕ','НА_ЛЕЧЕНИИ','ВЫБРАКОВАНО','ПАДЁЖ')
+        WHEN 'НА_ЛЕЧЕНИИ'   THEN NEW.status IN ('ЗДОРОВ','НА_КАРАНТИНЕ','ВЫБРАКОВАНО','ПАДЁЖ')
+        ELSE FALSE          -- ВЫБРАКОВАНО / ПАДЁЖ — терминальные статусы
+    END;
+
+    IF NOT v_allowed THEN
+        RAISE EXCEPTION 'Переход статуса «%» → «%» запрещён регламентом (используйте sp_change_animal_status)',
+            OLD.status, NEW.status;
+    END IF;
+
+    -- Лечение/карантин требуют осмотра с диагнозом; выбытие — причины и подтверждения.
+    IF NEW.status IN ('НА_ЛЕЧЕНИИ','НА_КАРАНТИНЕ') THEN
+        IF NOT EXISTS (
+            SELECT 1 FROM examination e
+             WHERE e.animal_id = NEW.id AND e.diagnosis_id IS NOT NULL
+               AND e.status_after = NEW.status
+               AND e.examined_at >= now() - interval '1 minute'
+        ) THEN
+            RAISE EXCEPTION 'Перевод в «%» требует осмотра с диагнозом (examination)', NEW.status;
+        END IF;
+    ELSIF NEW.status IN ('ВЫБРАКОВАНО','ПАДЁЖ') THEN
+        IF NOT EXISTS (SELECT 1 FROM disposal_event d WHERE d.animal_id = NEW.id) THEN
+            RAISE EXCEPTION 'Выбытие животного требует оформленной причины (disposal_event)';
+        END IF;
+    END IF;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_animal_status_flow ON animal;
+CREATE TRIGGER trg_animal_status_flow
+    BEFORE UPDATE OF status ON animal
+    FOR EACH ROW EXECUTE FUNCTION fn_animal_status_flow_check();
+
+COMMENT ON FUNCTION fn_animal_status_flow_check() IS
+    'Триггер: статус-флоу животного по регламенту ТЗ; обход sp_change_animal_status запрещён';
+
+-- =============================================================================
+-- ИТОГО триггеров в скрипте БД: 9
+--   1. trg_pasture_plot_area            5.1 площадь участка из геометрии
+--   2. trg_farm_boundary_area          5.1 площадь границы хозяйства
+--   3. trg_stock_movement_apply        5.2 атомарный остаток склада
+--   4. trg_grazing_event_rest_check    5.3 период отдыха участка
+--   5. trg_production_record_withdrawal 5.4 блокировка продукции (withdrawal)
+--   6. trg_auto_purchase_request       5.0 авто-заявка на закупку
+--   7. trg_stock_movement_writeoff_reason 5.5 списание только с причиной
+--   8. trg_treatment_withdrawal        5.6 автозаполнение срока ожидания
+--   9. trg_animal_status_flow          5.7 регламент статус-флоу животного
+-- =============================================================================;

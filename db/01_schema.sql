@@ -639,7 +639,7 @@ CREATE TABLE audit_log (
     user_id BIGINT NOT NULL,
     entity_name VARCHAR(64) NOT NULL,
     entity_id BIGINT NOT NULL,
-    action VARCHAR(10) NOT NULL CHECK (action IN ('CREATE','UPDATE','DELETE','LOGIN','EXPORT','OVERRIDE','DENY')),
+    action VARCHAR(10) NOT NULL CHECK (action IN ('CREATE','UPDATE','DELETE','LOGIN','EXPORT','OVERRIDE','DENY','READ_PII')),
     before_json JSONB,
     after_json JSONB,
     occurred_at TIMESTAMPTZ NOT NULL DEFAULT now(),

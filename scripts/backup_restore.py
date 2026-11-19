@@ -34,6 +34,10 @@ DB = {
     "database": os.environ.get("PGDATABASE", "farm"),
 }
 CONTAINER = os.environ.get("FARM_PG_CONTAINER", "farm_pg")
+# Как в scripts/smoke_api.py: local — утилиты PostgreSQL в PATH (без Docker CLI),
+# docker — pg_dump/pg_restore внутри контейнера. Если переменная не задана,
+# Docker выбирается только когда он реально доступен (демон отвечает).
+MODE = os.environ.get("FARM_PSQL_MODE", "").lower()
 
 
 def _env():
@@ -42,17 +46,38 @@ def _env():
     return e
 
 
+def _docker_available():
+    if MODE == "local":
+        return False
+    if MODE == "docker":
+        return True
+    if not shutil.which("docker"):
+        return False
+    try:
+        r = subprocess.run(["docker", "info", "--format", "{{.ServerVersion}}"],
+                           capture_output=True, text=True, timeout=8)
+        return r.returncode == 0
+    except Exception:
+        return False
+
+
+_DOCKER_OK = None
+
+
+def _use_docker():
+    global _DOCKER_OK
+    if _DOCKER_OK is None:
+        _DOCKER_OK = _docker_available()
+    return _DOCKER_OK
+
+
 def _psql_base():
     """psql/pg_dump внутри Docker-контейнера или локально — по доступности."""
-    if shutil.which("docker"):
-        return ["docker", "exec", "-i", CONTAINER]
-    return []  # локальные утилиты PostgreSQL в PATH
+    return ["docker", "exec", "-i", CONTAINER] if _use_docker() else []
 
 
 def _dump_base():
-    if shutil.which("docker"):
-        return ["docker", "exec", CONTAINER]
-    return []
+    return ["docker", "exec", CONTAINER] if _use_docker() else []
 
 
 def _run(cmd, *, env=None, input_text=None, timeout=600):
@@ -121,6 +146,44 @@ def _rotate(retention_days):
     return removed
 
 
+def cmd_rotate(args):
+    """Ротация вручную: удалить копии старше retention дней (с .sha256-спутниками).
+
+    Не удаляет только что созданный .dump, если тот оказался старше порога не
+    должен — mtime всегда = момент записи, так что это безопасно.
+    """
+    removed = _rotate(args.retention)
+    _append_registry({"action": "rotate", "retention_days": args.retention,
+                      "removed": removed,
+                      "ts": dt.datetime.now().isoformat(timespec="seconds")})
+    return {"removed": removed, "removed_count": len(removed),
+            "retention_days": args.retention}
+
+
+def cmd_list(args):
+    """Список копий на диске: имя, размер, mtime, срок до удаления по retention."""
+    os.makedirs(BACKUP_DIR, exist_ok=True)
+    now = dt.datetime.now()
+    items = []
+    for name in sorted(os.listdir(BACKUP_DIR)):
+        if not name.endswith(".dump"):
+            continue
+        p = os.path.join(BACKUP_DIR, name)
+        mtime = dt.datetime.fromtimestamp(os.path.getmtime(p))
+        age_days = (now - mtime).total_seconds() / 86400.0
+        items.append({
+            "file": name, "path": p, "size_bytes": os.path.getsize(p),
+            "created_at": mtime.isoformat(timespec="seconds"),
+            "age_days": round(age_days, 2),
+            "expires_in_days": round(args.retention - age_days, 2),
+            "will_expire": age_days >= args.retention,
+            "has_checksum": os.path.isfile(p + ".sha256"),
+        })
+    total = sum(i["size_bytes"] for i in items)
+    return {"files": items, "count": len(items), "total_bytes": total,
+            "backup_dir": BACKUP_DIR, "retention_days": args.retention}
+
+
 def _append_registry(entry):
     reg = os.path.join(BACKUP_DIR, "registry.jsonl")
     with open(reg, "a", encoding="utf-8") as fh:
@@ -174,6 +237,14 @@ def main():
     r.add_argument("--checksum", default="")
     r.add_argument("--id", default="")
     r.set_defaults(func=cmd_restore)
+
+    rot = sub.add_parser("rotate")
+    rot.add_argument("--retention", type=int, default=30)
+    rot.set_defaults(func=cmd_rotate)
+
+    ls = sub.add_parser("list")
+    ls.add_argument("--retention", type=int, default=30)
+    ls.set_defaults(func=cmd_list)
 
     a = ap.parse_args()
     try:
