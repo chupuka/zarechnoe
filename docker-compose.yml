@@ -14,6 +14,7 @@ services:
       PGPASSWORD: ${PGPASSWORD:?задай PGPASSWORD в .env}
       PGDATABASE: ${PGDATABASE:-postgres}
       PGSSLMODE: ${PGSSLMODE:-require}
+      PGSSL_NO_VERIFY: ${PGSSL_NO_VERIFY:-0}
       REPORTS_HOST: reports
       REPORTS_PORT: 4000
       # Ключ шифрования ПДн сотрудников (ТЗ п.7). В БД не хранится — только здесь.
@@ -42,5 +43,6 @@ services:
       PGPASSWORD: ${PGPASSWORD:?задай PGPASSWORD в .env}
       PGDATABASE: ${PGDATABASE:-postgres}
       PGSSLMODE: ${PGSSLMODE:-require}
+      PGSSL_NO_VERIFY: ${PGSSL_NO_VERIFY:-0}
     ports:
       - "127.0.0.1:4000:4000"
