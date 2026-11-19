@@ -11,6 +11,11 @@ module.exports = {
         user: process.env.PGUSER || 'farm',
         password: process.env.PGPASSWORD || 'farm',
         database: process.env.PGDATABASE || 'farm',
+        // Supabase pooler использует цепочку сертификатов, которую Node не доверяет.
+        // PGSSLMODE остаётся валидным для pg_dump/libpq, этот флаг — только для Node/pg.
+        ssl: process.env.PGSSL_NO_VERIFY === '1'
+            ? { rejectUnauthorized: false }
+            : undefined,
     },
     session: {
         // TTL сессии в user_session (ТЗ: «сессии — по безопасным токенам»)

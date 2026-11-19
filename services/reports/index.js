@@ -25,6 +25,11 @@ const pool = new Pool({
     password: process.env.PGPASSWORD || 'farm',
     database: process.env.PGDATABASE || 'farm',
     max: 4,
+    // Только для Node/pg: Supabase pooler отдаёт цепочку, которую Node не доверяет.
+    // Для pg_dump/libpq по-прежнему используется PGSSLMODE=require.
+    ssl: process.env.PGSSL_NO_VERIFY === '1'
+        ? { rejectUnauthorized: false }
+        : undefined,
 });
 
 const sha256 = (s) => crypto.createHash('sha256').update(s).digest('hex');
