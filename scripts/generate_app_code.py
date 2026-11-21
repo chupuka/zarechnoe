@@ -145,7 +145,7 @@ def build(files):
     out.write("Исходный код информационной системы «Заречное» (курсовой проект, вариант 11). ")
     out.write("Файл собран скриптом `scripts/generate_app_code.py` **только из исходников веб-приложения**: ")
     out.write("база данных, серверное ядро, микросервис отчётности, клиентская часть и конфигурация запуска.\n\n")
-    out.write("Стек: PostgreSQL 16 + PostGIS + pgcrypto · Node.js 22 + Express + pg + bcryptjs · ")
+    out.write("Стек: PostgreSQL 17.12 + PostGIS + pgcrypto · Node.js 22 + Express + pg + bcryptjs · ")
     out.write("vanilla JS + Leaflet/OpenStreetMap · Docker Compose.\n\n")
     out.write(f"Всего файлов: **{len(files)}**.\n\n")
 
