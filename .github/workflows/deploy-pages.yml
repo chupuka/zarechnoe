@@ -22,6 +22,11 @@ jobs:
       - name: Set production API base URL
         run: |
           printf "window.ZARECHNOE_API_BASE = 'https://api.zarechnoe.dpdns.org/api/v1';\n" > ui/public/deploy-config.js
+      - name: Cache-bust static assets
+        run: |
+          V="${{ github.sha }}"
+          sed -i "s|\./app\.js|./app.js?v=$V|g; s|\./styles\.css|./styles.css?v=$V|g" ui/public/index.html
+          grep -E 'styles\.css|src="\./app\.js' ui/public/index.html
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
