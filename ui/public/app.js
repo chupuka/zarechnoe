@@ -35,7 +35,7 @@ const I18N = {
         'login.submit': 'Войти', 'login.login': 'Логин', 'login.password': 'Пароль',
         'login.loginPh': 'например, director', 'login.passwordPh': '••••••••',
         'login.subtitle': 'Информационная система фермерского хозяйства',
-        'login.demo': 'Демо-доступ', 'login.demoHint': 'Пароль для всех ролей:',
+        'login.demo': 'Демо-доступ', 'login.demoHint': 'Нажмите на роль — вход по клику. Пароль для всех ролей:',
         'login.note': 'Технические роли (superuser, dba) при записи требуют заголовок X-Override-Reason.',
         'login.footer': 'ИС «Заречное» · REST API /api/v1 · Bearer-токен',
         'login.error': 'Не удалось войти', 'logout': 'Выйти', 'refresh': 'Обновить',
@@ -107,7 +107,7 @@ const I18N = {
         'login.submit': 'Sign in', 'login.login': 'Login', 'login.password': 'Password',
         'login.loginPh': 'e.g. director', 'login.passwordPh': '••••••••',
         'login.subtitle': 'Farm management information system',
-        'login.demo': 'Demo access', 'login.demoHint': 'Password for all roles:',
+        'login.demo': 'Demo access', 'login.demoHint': 'Click a role to sign in. Password for all roles:',
         'login.note': 'Technical roles (superuser, dba) require the X-Override-Reason header on writes.',
         'login.footer': 'IS "Zarechnoye" · REST API /api/v1 · Bearer token',
         'login.error': 'Sign in failed', 'logout': 'Sign out', 'refresh': 'Refresh',
@@ -1873,12 +1873,24 @@ function updateUserChip() {
     $('user-role').title = `${code} · ${role.type === 'TECHNICAL' ? 'TECHNICAL' : 'BUSINESS'}`;
 }
 
+/** Применить поисковый запрос к пунктам, доступным по правам. */
+function applyNavFilter() {
+    const q = ($('nav-search')?.value || '').trim().toLocaleLowerCase('ru');
+    for (const link of document.querySelectorAll('#sidebar .nav-link[data-view]')) {
+        const li = link.closest('li');
+        if (!li || li.hidden) continue; // уже скрыт правами
+        if (q && !String(link.textContent || '').toLocaleLowerCase('ru').includes(q)) li.hidden = true;
+    }
+    return q;
+}
+
 /** Скрыть пункты меню, права на которые отсутствуют (data-permission). */
 function renderMenu() {
     for (const link of document.querySelectorAll('#sidebar .nav-link[data-permission]')) {
         const li = link.closest('li');
         if (li) li.hidden = !hasPerm(link.dataset.permission);
     }
+    const q = applyNavFilter();
     for (const group of document.querySelectorAll('#sidebar .nav-group')) {
         const visible = [...group.querySelectorAll('.nav-link')].some((a) => {
             const li = a.closest('li');
@@ -1886,6 +1898,9 @@ function renderMenu() {
         });
         group.hidden = !visible;
     }
+    const anyVisible = [...document.querySelectorAll('#sidebar .nav-link[data-view]')]
+        .some((a) => { const li = a.closest('li'); return li && !li.hidden; });
+    show($('nav-empty'), Boolean(q) && !anyVisible);
     highlightMenu();
 }
 
@@ -4079,6 +4094,14 @@ function handleKey(e) {
 
 function bindEvents() {
     $('login-form').addEventListener('submit', doLogin);
+    document.querySelector('.login-demo').addEventListener('click', (e) => {
+        const btn = e.target.closest('.demo-login');
+        if (!btn) return;
+        $('login').value = btn.dataset.login;
+        $('password').value = 'demo1234';
+        $('login-form').requestSubmit();
+    });
+    $('nav-search').addEventListener('input', renderMenu);
     $('logout-btn').addEventListener('click', doLogout);
     $('theme-toggle').addEventListener('change', () => {
         state.theme = $('theme-toggle').checked ? 'dark' : 'light';

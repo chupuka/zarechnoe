@@ -84,14 +84,15 @@
 
             <aside class="login-demo" aria-label="Демо-доступы">
                 <p class="login-demo-title">Демо-доступ</p>
-                <p class="login-demo-hint">Пароль для всех ролей: <code>demo1234</code></p>
+                <p class="login-demo-hint">Нажмите на роль — логин и пароль подставятся автоматически.
+                    Пароль для всех ролей: <code>demo1234</code></p>
                 <ul class="demo-list">
-                    <li><code>director</code><span>Директор — отчёты, аудит, пользователи</span></li>
-                    <li><code>superuser</code><span>Суперпользователь — полный доступ</span></li>
-                    <li><code>dba</code><span>Администратор БД — технадминка</span></li>
-                    <li><code>vet</code><span>Зоотехник — животные и здоровье</span></li>
-                    <li><code>foreman</code><span>Бригадир — выпас, задачи, склад</span></li>
-                    <li><code>storekeeper</code><span>Кладовщик — склад и остатки</span></li>
+                    <li><button type="button" class="demo-login" data-login="director"><code>director</code><span>Директор — отчёты, аудит, пользователи</span></button></li>
+                    <li><button type="button" class="demo-login" data-login="superuser"><code>superuser</code><span>Суперпользователь — полный доступ</span></button></li>
+                    <li><button type="button" class="demo-login" data-login="dba"><code>dba</code><span>Администратор БД — технадминка</span></button></li>
+                    <li><button type="button" class="demo-login" data-login="vet"><code>vet</code><span>Зоотехник — животные и здоровье</span></button></li>
+                    <li><button type="button" class="demo-login" data-login="foreman"><code>foreman</code><span>Бригадир — выпас, задачи, склад</span></button></li>
+                    <li><button type="button" class="demo-login" data-login="storekeeper"><code>storekeeper</code><span>Кладовщик — склад и остатки</span></button></li>
                 </ul>
                 <p class="login-demo-note">Технические роли (superuser, dba) при записи требуют
                     заголовок <code>X-Override-Reason</code>.</p>
@@ -159,6 +160,12 @@
         -->
         <nav id="sidebar" class="sidebar" aria-label="Основная навигация">
             <div class="sidebar-scroll">
+                <div class="sidebar-search">
+                    <label class="visually-hidden" for="nav-search">Поиск по разделам</label>
+                    <input id="nav-search" type="search" class="field-input" placeholder="Найти раздел…"
+                           aria-label="Поиск по разделам" autocomplete="off" spellcheck="false">
+                </div>
+                <p id="nav-empty" class="nav-empty" hidden>Ничего не найдено</p>
 
                 <section class="nav-group" aria-labelledby="nav-home">
                     <h2 id="nav-home" class="nav-group-title">Обзор</h2>
