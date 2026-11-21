@@ -33,7 +33,7 @@ const ASSIGN_ROLES = ['VET', 'HERDSMAN', 'FOREMAN', 'ZOOTECHNIK'];
 const I18N = {
     ru: {
         'login.submit': 'Войти', 'login.login': 'Логин', 'login.password': 'Пароль',
-        'login.loginPh': 'например, director', 'login.passwordPh': '••••••••',
+        'login.loginPh': '', 'login.passwordPh': '',
         'login.subtitle': 'Информационная система фермерского хозяйства',
         'login.demo': 'Демо-доступ', 'login.demoHint': 'Нажмите на роль — вход по клику. Пароль для всех ролей:',
         'login.note': 'Технические роли (superuser, dba) при записи требуют заголовок X-Override-Reason.',
@@ -105,7 +105,7 @@ const I18N = {
     },
     en: {
         'login.submit': 'Sign in', 'login.login': 'Login', 'login.password': 'Password',
-        'login.loginPh': 'e.g. director', 'login.passwordPh': '••••••••',
+        'login.loginPh': '', 'login.passwordPh': '',
         'login.subtitle': 'Farm management information system',
         'login.demo': 'Demo access', 'login.demoHint': 'Click a role to sign in. Password for all roles:',
         'login.note': 'Technical roles (superuser, dba) require the X-Override-Reason header on writes.',
@@ -4094,7 +4094,8 @@ function handleKey(e) {
 
 function bindEvents() {
     $('login-form').addEventListener('submit', doLogin);
-    document.querySelector('.login-demo').addEventListener('click', (e) => {
+    const demo = document.querySelector('.login-demo');
+    if (demo) demo.addEventListener('click', (e) => {
         const btn = e.target.closest('.demo-login');
         if (!btn) return;
         $('login').value = btn.dataset.login;
