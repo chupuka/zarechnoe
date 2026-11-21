@@ -2750,6 +2750,24 @@ body { font-size: var(--fs-base); line-height: 1.55; }
   min-height: 40px;
   font-size: var(--fs-sm);
 }
+.user-info { cursor: pointer; }
+
+body.compact-tables .data-table thead th { padding: 6px var(--u-2); }
+body.compact-tables .data-table tbody td { padding: 6px var(--u-2); }
+
+.preset-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--u-1);
+  flex: 1 1 100%;
+  margin-top: var(--u-1);
+  padding-top: var(--u-1);
+  border-top: 1px dashed var(--line-strong);
+}
+.preset-bar .preset-select { width: auto; min-width: 210px; flex: 0 1 260px; }
+.preset-bar .preset-name { width: auto; min-width: 150px; flex: 0 1 180px; }
+
 .live-hint {
   margin-top: 4px;
   color: var(--ink-soft);

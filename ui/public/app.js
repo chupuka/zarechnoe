@@ -20,6 +20,17 @@ const LANG_KEY = 'zarechnoe.lang';
 const OVERRIDE_KEY = 'zarechnoe.override';
 const DEFAULT_LIMIT = 25;
 const MAX_LIMIT = 200;
+const PRESETS_KEY = 'zarechnoe.filterPresets';
+const UI_PREFS_KEY = 'zarechnoe.uiPrefs';
+
+/** Безопасное чтение/запись JSON в localStorage. */
+function loadStore(key, fallback) {
+    try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; }
+    catch { return fallback; }
+}
+function saveStore(key, value) {
+    try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* ignore */ }
+}
 
 const ANIMAL_STATUSES = ['ЗДОРОВ', 'НА_ОСМОТРЕ', 'НА_КАРАНТИНЕ', 'НА_ЛЕЧЕНИИ', 'НА_ПРОДАЖЕ', 'ПРОДАН', 'ВЫБРАКОВАНО', 'ПАДЁЖ'];
 const TASK_STATUSES = ['NEW', 'IN_WORK', 'DONE', 'CANCELLED'];
@@ -349,6 +360,7 @@ const state = {
     offset: 0,
     total: 0,
     filters: {},                // активные фильтры текущего раздела (name -> строка)
+    currentPreset: null,        // имя применённого сохранённого набора фильтров
     extra: {},                 // резерв: вычисленные/версионные значения
     extraEndpoint: null,      // вариант эндпоинта (склад: batches/balances)
     sort: '',
@@ -1421,6 +1433,9 @@ function buildActions() {
     const shown = new Set();
     const addOnce = (a) => { if (shown.has(a.id)) return; shown.add(a.id); add(a); };
 
+    addOnce({ id: 'ui-settings', group: 'Настройки', kind: 'ПРОФИЛЬ', title: 'Мои настройки',
+        hint: 'Стартовый раздел, размер страницы, плотность таблиц', run: openUiSettings });
+
     const create = currentCreateAction(page);
     if (create) addOnce(Object.assign({ group: 'На этой странице', kind: 'СОЗДАТЬ' }, create));
 
@@ -1978,6 +1993,12 @@ function highlightMenu() {
 }
 
 function defaultPage() {
+    /* Пользователь может выбрать стартовый раздел в «Моих настройках». */
+    const prefs = loadStore(UI_PREFS_KEY, {});
+    if (prefs.defaultPage && PAGES[prefs.defaultPage]
+        && (!PAGES[prefs.defaultPage].perm || hasPerm(PAGES[prefs.defaultPage].perm))) {
+        return prefs.defaultPage;
+    }
     /* Точка входа для всех ролей — «Главная»: она не требует права и собирает
        показатели только по разрешённым разделам. */
     if (PAGES.home) return 'home';
@@ -2013,6 +2034,7 @@ function route() {
     state.offset = 0;
     state.sort = '';
     state.filters = {};
+    state.currentPreset = null;
     state.extra = {};
     state.extraEndpoint = null;
     state.selectedRow = null;
@@ -2084,6 +2106,46 @@ async function loadFilterOptions(f) {
         value: r.id !== undefined && r.id !== null ? r.id : (r.code !== undefined ? r.code : r.setting_key),
         label: r.label || r.name || r.full_name || r.login || r.code || ('#' + r.id)
     }));
+}
+
+/* ---- Сохранённые наборы фильтров (localStorage, без сервера) ------------ */
+function presetsFor(pageId) {
+    const all = loadStore(PRESETS_KEY, {});
+    return Array.isArray(all[pageId]) ? all[pageId] : [];
+}
+function persistPresets(pageId, list) {
+    const all = loadStore(PRESETS_KEY, {});
+    all[pageId] = list;
+    saveStore(PRESETS_KEY, all);
+}
+function applyPreset(name) {
+    const rec = presetsFor(state.page).find((p) => p.name === name);
+    if (!rec) return;
+    state.currentPreset = name;
+    state.filters = Object.assign({}, rec.filters);
+    state.pageNo = 1; state.offset = 0; state.sort = '';
+    const page = currentPage();
+    configureFilters(page);
+    loadPage();
+}
+function saveCurrentPreset(nameInput) {
+    readFilters();
+    const list = presetsFor(state.page);
+    const name = (nameInput.value || '').trim() || ('Фильтр ' + (list.length + 1));
+    const rec = { name, filters: Object.assign({}, state.filters) };
+    const idx = list.findIndex((p) => p.name === name);
+    if (idx >= 0) list[idx] = rec; else list.push(rec);
+    persistPresets(state.page, list);
+    state.currentPreset = name;
+    configureFilters(currentPage());
+    toast(t('done'), 'ok');
+}
+function deleteCurrentPreset() {
+    const name = state.currentPreset;
+    if (!name) return;
+    persistPresets(state.page, presetsFor(state.page).filter((p) => p.name !== name));
+    state.currentPreset = null;
+    configureFilters(currentPage());
 }
 
 function configureFilters(page) {
@@ -2165,6 +2227,30 @@ function configureFilters(page) {
             class: 'btn btn-sm btn-ghost tool-reset', type: 'button', text: t('reset'),
             on: { click: () => resetFilters() }
         }));
+        const bar = el('div', { class: 'preset-bar' });
+        const sel = el('select', { class: 'field-input preset-select' });
+        sel.appendChild(el('option', { value: '', text: 'Сохранённые фильтры: текущие' }));
+        for (const p of presetsFor(state.page)) {
+            sel.appendChild(el('option', { value: p.name, text: p.name }));
+        }
+        sel.value = state.currentPreset || '';
+        sel.addEventListener('change', () => applyPreset(sel.value));
+        const nameInput = el('input', {
+            class: 'field-input preset-name', type: 'text',
+            placeholder: 'Название набора', autocomplete: 'off'
+        });
+        bar.appendChild(sel);
+        bar.appendChild(nameInput);
+        bar.appendChild(el('button', {
+            class: 'btn btn-sm btn-ghost', type: 'button', text: '★ Сохранить',
+            title: 'Сохранить текущие фильтры под этим названием',
+            on: { click: () => saveCurrentPreset(nameInput) }
+        }));
+        bar.appendChild(el('button', {
+            class: 'btn btn-sm btn-ghost', type: 'button', text: 'Удалить',
+            on: { click: deleteCurrentPreset }
+        }));
+        box.appendChild(bar);
     }
 }
 
@@ -2196,10 +2282,11 @@ function queryFor(page) {
     return q;
 }
 
-function applyFilters() { readFilters(); state.pageNo = 1; state.offset = 0; loadPage(); }
+function applyFilters() { readFilters(); state.currentPreset = null; state.pageNo = 1; state.offset = 0; loadPage(); }
 
 function resetFilters() {
     const page = currentPage();
+    state.currentPreset = null;
     state.filters = page && page.preset ? Object.assign({}, page.preset) : {};
     state.extraEndpoint = null;
     state.pageNo = 1; state.offset = 0; state.sort = '';
@@ -3417,6 +3504,39 @@ function openMoveGroup() {
     });
 }
 
+/* ---- Мои настройки интерфейса (только localStorage) ---------------------- */
+function applyUiPrefs() {
+    const prefs = loadStore(UI_PREFS_KEY, {});
+    document.body.classList.toggle('compact-tables', !!prefs.compact);
+    const n = Number(prefs.limit);
+    state.limit = Number.isFinite(n) && n >= 10 && n <= MAX_LIMIT ? n : DEFAULT_LIMIT;
+}
+
+function openUiSettings() {
+    const prefs = loadStore(UI_PREFS_KEY, {});
+    const pages = [{ value: '', label: 'Главная (по умолчанию)' }];
+    for (const [id, p] of Object.entries(PAGES)) {
+        if (!p.perm || hasPerm(p.perm)) pages.push({ value: id, label: tr(p.title) });
+    }
+    openModal({
+        title: 'Мои настройки',
+        note: 'Хранятся только в этом браузере, на сервер не отправляются.',
+        fields: [
+            F('defaultPage', 'select', { options: pages }),
+            F('limit', 'select', { options: [
+                { value: 25, label: '25' }, { value: 50, label: '50' }, { value: 100, label: '100' }
+            ] }),
+            F('compact', 'checkbox')
+        ],
+        values: { defaultPage: prefs.defaultPage || '', limit: state.limit, compact: !!prefs.compact },
+        onSubmit: async (payload) => {
+            saveStore(UI_PREFS_KEY, payload);
+            applyUiPrefs();
+            toast(t('done'), 'ok');
+        }
+    });
+}
+
 /* PATCH /admin/settings/:key */
 function openSettingEdit(row) {
     openModal({
@@ -4204,6 +4324,7 @@ function bindEvents() {
             $('sidebar-toggle').setAttribute('aria-expanded', 'false');
         }
     });
+    $('user-info').addEventListener('click', openUiSettings);
     $('refresh-btn').addEventListener('click', () => loadPage());
     $('create-btn').addEventListener('click', () => {
         if (state.createAction) state.createAction.run(); else openCreateSmart();
@@ -4212,6 +4333,7 @@ function bindEvents() {
     $('pager-next').addEventListener('click', () => { state.pageNo++; state.offset = (state.pageNo - 1) * state.limit; loadPage(); });
     $('pager-limit').addEventListener('change', () => {
         state.limit = Math.min(Math.max(1, Number($('pager-limit').value) || DEFAULT_LIMIT), MAX_LIMIT);
+        saveStore(UI_PREFS_KEY, Object.assign(loadStore(UI_PREFS_KEY, {}), { limit: state.limit }));
         state.pageNo = 1; state.offset = 0;
         loadPage();
     });
@@ -4255,6 +4377,11 @@ function bindEvents() {
     });
 
     window.addEventListener('hashchange', route);
+    // Браузер восстанавливает значения форм после загрузки — вернуть наш лимит.
+    window.addEventListener('load', () => {
+        const lim = $('pager-limit');
+        if (lim) lim.value = String(state.limit);
+    });
     document.addEventListener('keydown', handleKey);
     window.addEventListener('resize', debounce(() => {
         if (state.chartCurrent) drawChart($('chart-canvas'), state.chartCurrent);
@@ -4272,6 +4399,7 @@ async function bootstrap() {
     bindEvents();
     applyTheme();
     applyLang();
+    applyUiPrefs();
     renderMenu();
 
     let token = null;
