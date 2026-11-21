@@ -2538,3 +2538,175 @@ body.has-modal { overflow: hidden; }
 @media (prefers-reduced-motion: reduce) {
   .loading::before, .help-dialog[open], .modal-dialog, .action-dialog[open] { animation: none; }
 }
+
+/* ==========================================================================
+   25. Читаемость и эргономика (редакция после разбора интерфейса)
+   --------------------------------------------------------------------------
+   Ничего не перекрашиваем заново: снимаем только конкретные проблемы —
+   мелкий/серый текст, сбитую шапку, обрезки пунктов меню, рваные плашки,
+   «липкий» заголовок таблицы и закрытые тостами нижние строки.
+   ========================================================================== */
+
+:root {
+  --fs-xs: 0.8125rem;   /* 13 — было 12 */
+  --fs-sm: 0.875rem;    /* 14 — было 13 */
+  --fs-base: 1rem;      /* 16 — было 15 */
+  --ink: #17220F;
+  --ink-soft: #415038;  /* контраст ~7:1 на песочном фоне */
+  --ink-muted: #5A6650; /* контраст ~5.4:1 — был ~3.3:1 */
+}
+[data-theme="dark"] {
+  --ink: #F1F5EC;
+  --ink-soft: #C8D4BC;
+  --ink-muted: #A9B79A;
+}
+
+body { font-size: var(--fs-base); line-height: 1.55; }
+
+/* --- Шапка: не сбивать в кучу на узком окне ------------------------------ */
+.app-header { gap: var(--u-2); padding-inline: var(--u-2); }
+.header-spacer { min-width: var(--u-2); }
+.header-brand-name { overflow: hidden; text-overflow: ellipsis; }
+.user-name {
+  max-width: 24ch; overflow: hidden; text-overflow: ellipsis;
+}
+@media (max-width: 1280px) {
+  .user-name { display: none; }          /* остаётся роль — её достаточно */
+  .theme-switch-label { display: none; } /* «Светлая/Тёмная» дублирует вид */
+  .header-actions .key-hint { display: none; }
+}
+@media (max-width: 720px) {
+  .header-brand-name { display: none; }
+  .user-role { display: none; }
+  .app-header { gap: var(--u-1); }
+}
+
+/* --- Меню: больше никаких «ani / grp» на ноутбуке ------------------------ */
+@media (min-width: 901px) and (max-width: 1200px) {
+  :root { --sidebar-w: 212px; }
+  .sidebar { width: 212px; overflow-x: hidden; }
+  .content, .main { margin-left: 212px; }
+  .sidebar .nav-group-title { display: block; }
+  .sidebar .nav-note { display: block; }
+  .nav-list .nav-link {
+    justify-content: flex-start;
+    padding: var(--u-1) var(--u-2);
+    font-size: var(--fs-sm);
+    min-height: 44px;
+  }
+  .nav-list .nav-link::after { content: none; }
+}
+
+.nav-list .nav-link { font-size: var(--fs-sm); min-height: 44px; }
+.nav-group-title { font-size: var(--fs-sm); }
+.nav-note { font-size: var(--fs-xs); font-family: var(--font); }
+.nav-note code, .demo-list code { color: var(--dark); }
+.field-label, .label, .stat-label { font-size: var(--fs-sm); }
+
+/* --- Плашки: ровная сетка вместо «рваного» flex-переноса ----------------- */
+.stat-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 164px), 1fr));
+  gap: var(--u-2);
+}
+.stat-card { min-width: 0; }
+.stat-hint {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  line-height: 1.35;
+}
+.kpi-grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr));
+}
+.kpi-label, .kpi-foot { white-space: normal; line-height: 1.35; }
+
+/* --- Таблицы: крупнее, с закреплённым первым столбцом -------------------- */
+.data-table { font-size: 0.9375rem; }
+.data-table thead th { font-size: var(--fs-sm); letter-spacing: 0.04em; }
+.data-table tbody td { padding: 12px var(--u-2); }
+.data-table thead th:first-child,
+.data-table tbody td:first-child {
+  position: sticky;
+  inset-inline-start: 0;
+  z-index: 1;
+  background: var(--surface);
+  box-shadow: 1px 0 0 var(--line);
+}
+.data-table thead th:first-child { z-index: 3; background: var(--surface-sunken); }
+.data-table tbody tr:nth-child(even) td:first-child { background: var(--green-wash); }
+.data-table tbody tr:hover td:first-child,
+.data-table tbody tr.is-selected td:first-child { background: var(--surface-hover); }
+.table-wrap { max-inline-size: 100%; }
+
+/* --- Нижняя панель не перекрывает таблицу, тосты — над ней --------------- */
+.hotkeys-bar {
+  position: static;
+  box-shadow: none;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  margin-top: var(--u-4);
+}
+.toast-stack { bottom: 76px; }
+@media (max-width: 600px) {
+  .toast-stack { bottom: 72px; }
+  .hotkeys-hint { display: none; }
+  .hotkeys-bar { justify-content: flex-end; }
+}
+
+/* --- Ссылка «к содержимому» для клавиатуры ------------------------------- */
+.skip-link {
+  position: fixed;
+  left: var(--u-2); top: -80px;
+  z-index: 100;
+  padding: 10px var(--u-2);
+  background: var(--green);
+  color: #fff;
+  border-radius: var(--r);
+  font-weight: 650;
+}
+.skip-link:focus { top: var(--u-2); color: #fff; text-decoration: none; }
+
+/* --- Крупный текст не должен ломать каркас ------------------------------- */
+.stat-card, .kpi-card, .quick-link, .record-card { min-height: 0; }
+.page-tools .tool-field .field-input { min-height: 40px; }
+.btn { min-height: 40px; }
+.btn-sm { min-height: 32px; }
+
+/* --- На телефоне таблица становится списком карточек -------------------- */
+@media (max-width: 600px) {
+  .table-wrap { overflow: visible; border: 0; background: transparent; }
+  .table-wrap table { min-width: 0; width: 100%; }
+  .table-wrap table, .table-wrap tbody, .table-wrap tr, .table-wrap td { display: block; }
+  .table-wrap thead { display: none; }
+  .table-wrap tbody { display: grid; gap: var(--u-2); }
+  .table-wrap tr {
+    padding: var(--u-2);
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--r);
+  }
+  .table-wrap td {
+    display: flex; align-items: baseline; justify-content: space-between;
+    gap: var(--u-2);
+    padding: 6px 0;
+    border: 0;
+    text-align: right;
+  }
+  .table-wrap td::before {
+    content: attr(data-label);
+    flex: 0 1 auto;
+    text-align: left;
+    font-size: var(--fs-xs);
+    font-weight: 650;
+    color: var(--ink-muted);
+  }
+  .table-wrap td:first-child {
+    position: static; box-shadow: none; background: transparent;
+    padding-bottom: var(--u-1);
+    border-bottom: 1px solid var(--line-faint);
+    font-weight: 650;
+  }
+  .table-wrap td:first-child::before { display: none; }
+  .table-wrap caption { text-align: left; padding: var(--u-1) 0; }
+}

@@ -427,6 +427,16 @@ function el(tag, props, children) {
 function clear(node) { if (node) while (node.firstChild) node.removeChild(node.firstChild); }
 function show(node, visible) { if (node) node.hidden = !visible; }
 
+/** Обёртка таблицы: доступная область прокрутки (клавиатура + скринридер). */
+function tableWrap(label) {
+    const wrap = document.createElement('div');
+    wrap.className = 'table-wrap';
+    wrap.tabIndex = 0;
+    wrap.setAttribute('role', 'region');
+    wrap.setAttribute('aria-label', label || 'Таблица данных');
+    return wrap;
+}
+
 /** Явное экранирование (для строковых атрибутов / совместимости). */
 function escapeHtml(v) {
     return String(v === null || v === undefined ? '' : v)
@@ -457,6 +467,15 @@ function formatDate(v) {
         if (!Number.isNaN(d.getTime())) return d.toLocaleString(state.lang === 'en' ? 'en-GB' : 'ru-RU');
     }
     return s;
+}
+
+/** Дата в таблице: без секунд; для даты без времени — только число. */
+function formatCellDate(v) {
+    const s = String(v);
+    const m = /^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2})/.exec(s);
+    if (!m) return s;
+    if (m[2] === '00' && m[3] === '00') return m[1];
+    return `${m[1]} ${m[2]}:${m[3]}`;
 }
 
 function isTechnical() {
@@ -2345,7 +2364,7 @@ function cellContent(value, key) {
     }
     if (['status', 'risk', 'action', 'priority', 'backup_type', 'action_type', 'role_code', 'movement_type', 'rest_status'].includes(key)) return statusBadge(value);
     if (typeof value === 'number') return el('span', { text: humanNumber(value) });
-    if (/^\d{4}-\d{2}-\d{2}(T|$)/.test(String(value))) return el('span', { text: formatDate(value) });
+    if (/^\d{4}-\d{2}-\d{2}(T|$)/.test(String(value))) return el('span', { text: formatCellDate(value) });
     return el('span', { text: String(value) });
 }
 
@@ -2356,7 +2375,7 @@ function isNumericKey(key) {
 
 function renderTable(page, rows, captionText) {
     const holder = $('view');
-    const wrap = el('div', { class: 'table-wrap' });
+    const wrap = tableWrap();
     const table = el('table', { class: 'data-table' });
     const cols = columnsFor(page, rows);
     const sortable = sortableFor(page);
@@ -2616,7 +2635,7 @@ function formatUptime(v) {
 }
 
 function simpleDbaTable(rows) {
-    const wrap = el('div', { class: 'table-wrap' });
+    const wrap = tableWrap();
     const table = el('table', { class: 'data-table' });
     const head = el('thead');
     const hr = el('tr');
@@ -2845,7 +2864,7 @@ function renderBackups(data) {
 
     /* История копий */
     const histBox = panel('История копий');
-    const wrap = el('div', { class: 'table-wrap' });
+    const wrap = tableWrap();
     const table = el('table', { class: 'data-table' });
     const head = el('tr');
     for (const c of ['Копия', 'Тип', 'Статус', 'Создана', 'Размер', 'Хранение, дн.', 'Восстановлений', 'Инициатор', '']) head.appendChild(el('th', { text: c }));
@@ -2889,7 +2908,7 @@ function renderBackups(data) {
 
     /* Восстановления — там же, где копии */
     const restBox = panel('Восстановления');
-    const rwrap = el('div', { class: 'table-wrap' });
+    const rwrap = tableWrap();
     const rtable = el('table', { class: 'data-table' });
     const rhead = el('tr');
     for (const c of ['#', 'Копия', 'Статус', 'Начато', 'Завершено', 'Причина', 'Выполнил']) rhead.appendChild(el('th', { text: c }));
@@ -3016,7 +3035,7 @@ function renderPerf(p) {
             }
         }) : null
     ]);
-    const wrap = el('div', { class: 'table-wrap' });
+    const wrap = tableWrap();
     const table = el('table', { class: 'data-table' });
     const head = el('tr');
     for (const c of ['Запрос', 'Вызовов', 'Среднее, мс', 'Максимум, мс', 'Медленных']) head.appendChild(el('th', { text: c }));
@@ -3108,7 +3127,7 @@ function renderGrazing(page, result) {
                 on: { click: () => openAssignEmployee() }
             }) : null
         ]);
-        const gwrap = el('div', { class: 'table-wrap' });
+        const gwrap = tableWrap();
         const gtable = el('table', { class: 'data-table' });
         const gh = el('tr');
         for (const c of ['Группа', 'Животных', 'Здоровых', 'Участок', 'Дней на участке', 'Площадь, га']) gh.appendChild(el('th', { text: c }));
