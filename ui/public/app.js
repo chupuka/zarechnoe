@@ -18,6 +18,10 @@ const TOKEN_KEY = 'zarechnoe.token';
 const THEME_KEY = 'zarechnoe.theme';
 const LANG_KEY = 'zarechnoe.lang';
 const OVERRIDE_KEY = 'zarechnoe.override';
+// Демо-вход по ссылке ?demo=<логин>: только для демонстрационных аккаунтов.
+const DEMO_LOGINS = ['director', 'superuser', 'dba', 'vet', 'foreman', 'storekeeper',
+    'vet2', 'foreman2', 'storekeeper2'];
+const DEMO_PASSWORD = 'demo1234';
 const DEFAULT_LIMIT = 25;
 const MAX_LIMIT = 200;
 
@@ -1414,6 +1418,18 @@ function buildActions() {
             addOnce({ id: 'go-' + id, group: 'Перейти', kind: 'РАЗДЕЛ', title, hint, run: () => navigate(id) });
         }
     }
+    /* Любой доступный раздел — тоже цель поиска в палитре (Ctrl+K). */
+    for (const link of document.querySelectorAll('#sidebar .nav-link[data-view]')) {
+        const view = link.dataset.view;
+        const id = ALIASES[view] || view;
+        if (!id || id === state.page || !PAGES[id]) continue;
+        const perm = link.dataset.permission;
+        if (perm && !hasPerm(perm)) continue;
+        const title = tr((PAGES[id] && PAGES[id].title) || link.textContent);
+        addOnce({ id: 'go-' + id, group: 'Перейти', kind: 'РАЗДЕЛ',
+            title, hint: 'Открыть раздел «' + title + '»', run: () => navigate(id) });
+    }
+
     if (hasPerm('user:WRITE')) {
         for (const [id, title, hint, run] of [
             ['user-block', 'Заблокировать пользователя', 'Причина обязательна, сессии отзываются', openUserBlock],
@@ -4199,7 +4215,21 @@ async function bootstrap() {
 
     let token = null;
     try { token = sessionStorage.getItem(TOKEN_KEY); } catch { /* ignore */ }
-    if (!token) { showLogin(''); return; }
+    if (!token) {
+        /* Демо-вход по ссылке: ?demo=vet — без подсказок на экране входа. */
+        const demo = new URLSearchParams(location.search).get('demo');
+        if (demo && DEMO_LOGINS.includes(demo)) {
+            $('login').value = demo;
+            $('password').value = DEMO_PASSWORD;
+            await doLogin({ preventDefault() {} });
+            const url = new URL(location.href);
+            url.searchParams.delete('demo');
+            history.replaceState(null, '', url.toString());
+            return; // doLogin уже показал приложение и выбрал раздел
+        }
+        showLogin('');
+        return;
+    }
 
     state.token = token;
     try {
