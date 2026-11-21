@@ -645,7 +645,9 @@ const PAGES = {
         writePerm: 'task:WRITE', deletePerm: 'task:DELETE',
         crud: {
             createFields: [
-                F('task_type_id', 'select', { required: true, optionsFrom: '/task-types' }),
+                F('task_type_id', 'select', { required: true, optionsFrom: '/task-types',
+                    autofill: { title: 'name' },
+                    liveHint: (r) => r ? 'Тип задачи: ' + (r.name || r.code || '—') : '' }),
                 F('title', 'text', { required: true }),
                 F('assigned_to', 'select', { required: true, optionsFrom: '/employees' }),
                 F('planned_date', 'date'), F('due_at', 'datetime-local'),
@@ -1069,7 +1071,8 @@ async function loadOptions(path) {
         else if (r.batch_number && r.nomenclature) text = r.batch_number + ' · ' + r.nomenclature;
         else if (r.batch_number && r.sku) text = r.batch_number + ' · ' + r.sku;
         if (r.status && path.includes('backups')) text += ' [' + r.status + ']';
-        return { value: id, label: text };
+        // raw сохраняем для автоподстановок в формах; в payload он не попадает.
+        return { value: id, label: text, raw: r };
     });
 }
 
@@ -1138,6 +1141,7 @@ async function openModal(cfg) {
     clear(holder);
     if (cfg.note) holder.appendChild(el('p', { class: 'notice', text: cfg.note }));
     for (const spec of resolved) holder.appendChild(buildField(spec, (cfg.values || {})[spec.name]));
+    refreshFormHints();
     const first = holder.querySelector('input, select, textarea');
     if (first) setTimeout(() => first.focus(), 30);
 }
@@ -1153,6 +1157,41 @@ async function resolveFieldOptions(fields) {
         out.push(copy);
     }
     return out;
+}
+
+/** Поиск узлов формы по имени (без CSS.escape — имена простые, но надёжнее). */
+function fieldNode(name) {
+    return [...$('modal-fields').querySelectorAll('[data-name]')].find((n) => n.dataset.name === name) || null;
+}
+function fieldWrap(name) {
+    return [...$('modal-fields').querySelectorAll('[data-field-wrap]')].find((n) => n.dataset.fieldWrap === name) || null;
+}
+function formValues() {
+    const out = {};
+    for (const n of $('modal-fields').querySelectorAll('[data-name]')) {
+        out[n.dataset.name] = n.type === 'checkbox' ? n.checked : n.value;
+    }
+    return out;
+}
+function selectedOptionRaw(spec, input) {
+    if (spec.type !== 'select' || !input) return null;
+    const opt = (spec.options || []).find((o) => String(o.value) === String(input.value));
+    return opt ? (opt.raw || null) : null;
+}
+
+/** Пересчитать живые подсказки открытой формы. */
+function refreshFormHints() {
+    const specs = (state.modal && state.modal.resolvedFields) || [];
+    for (const spec of specs) {
+        if (!spec.liveHint) continue;
+        const wrap = fieldWrap(spec.name);
+        if (!wrap) continue;
+        let hint = wrap.querySelector('.live-hint');
+        if (!hint) { hint = el('p', { class: 'field-hint live-hint' }); wrap.appendChild(hint); }
+        const text = spec.liveHint(selectedOptionRaw(spec, fieldNode(spec.name)), formValues()) || '';
+        hint.textContent = text;
+        hint.hidden = !text;
+    }
 }
 
 function buildField(spec, value) {
@@ -1182,6 +1221,19 @@ function buildField(spec, value) {
             input.appendChild(n);
         }
         if (value === undefined || value === null || value === '') input.value = '';
+        if (spec.autofill || spec.liveHint) {
+            input.addEventListener('change', () => {
+                const raw = selectedOptionRaw(spec, input);
+                if (spec.autofill && raw) {
+                    for (const [target, key] of Object.entries(spec.autofill)) {
+                        const node = fieldNode(target);
+                        if (!node || node.value !== '') continue; // не затираем ручной ввод
+                        if (raw[key] !== undefined && raw[key] !== null && raw[key] !== '') node.value = String(raw[key]);
+                    }
+                }
+                refreshFormHints();
+            });
+        }
     } else if (spec.type === 'textarea') {
         input = el('textarea', { class: 'field-input', rows: '3', dataset: { name }, placeholder: spec.ph || '' });
         input.value = value === undefined || value === null ? '' : String(value);
@@ -3272,7 +3324,17 @@ function openMovement(preset) {
     const isWriteOff = preset === 'WRITE_OFF';
     const fields = [
         F('movement_type', 'select', { required: true, options: staticOpts(MOVEMENT_TYPES) }),
-        F('batch_id', 'select', { required: true, optionsFrom: '/stock/batches' }),
+        F('batch_id', 'select', { required: true, optionsFrom: '/stock/batches',
+            liveHint: (r, v) => {
+                if (!r) return '';
+                const parts = [r.nomenclature, r.sku, r.warehouse].filter(Boolean);
+                if (r.qty_on_hand !== undefined && r.qty_on_hand !== null) parts.push('остаток ' + r.qty_on_hand);
+                const qty = Number(v.qty), cost = Number(r.unit_cost);
+                if (Number.isFinite(qty) && qty > 0 && Number.isFinite(cost) && cost > 0) {
+                    parts.push('сумма ' + humanNumber(qty * cost));
+                }
+                return parts.join(' · ');
+            } }),
         F('qty', 'number', { required: true, step: '0.001' }),
         F('write_off_reason_id', 'select', { optionsFrom: '/write-off-reasons' }),
         F('comment', 'text')
@@ -3321,7 +3383,9 @@ function openAnimalStatus(row) {
         fields: [
             F('status', 'select', { required: true, options: staticOpts(ANIMAL_STATUSES) }),
             F('reason', 'textarea', { required: true, span: true }),
-            F('disposal_reason_id', 'select', { optionsFrom: '/disposal-reasons' }),
+            F('disposal_reason_id', 'select', { optionsFrom: '/disposal-reasons',
+                autofill: { reason: 'name' },
+                liveHint: (r) => r && r.reason_type ? 'Тип причины: ' + r.reason_type : '' }),
             F('diagnosis_id', 'select', { optionsFrom: '/diagnoses' }),
             F('drug_nomenclature_id', 'number'), F('dosage', 'number', { step: '0.001' })
         ],
@@ -4155,6 +4219,7 @@ function bindEvents() {
     $('map-close').addEventListener('click', () => hideMap());
     $('modal').addEventListener('click', (e) => { if (e.target.closest('[data-modal-close]')) closeModal(); });
     $('modal-form').addEventListener('submit', onModalSubmit);
+    $('modal-fields').addEventListener('input', refreshFormHints);
     $('help-open').addEventListener('click', openHelp);
     $('help-close').addEventListener('click', closeHelp);
     $('help-ok').addEventListener('click', closeHelp);

@@ -2750,6 +2750,12 @@ body { font-size: var(--fs-base); line-height: 1.55; }
   min-height: 40px;
   font-size: var(--fs-sm);
 }
+.live-hint {
+  margin-top: 4px;
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+
 .nav-empty {
   padding: var(--u-3) var(--u-2);
   text-align: center;
