@@ -209,11 +209,11 @@ const COLUMN_LABELS = {
     assigned_to: ['ID исполнителя', 'Assignee ID'], priority: ['Приоритет', 'Priority'],
     planned_date: ['План. дата', 'Planned date'], due_at: ['Срок', 'Due at'],
     completed_at: ['Завершено', 'Completed'], requires_writeoff: ['Списание корма', 'Feed write-off'],
-    full_name: ['ФИО', 'Full name'], position_id: ['ID должности', 'Position ID'],
+    full_name: ['ФИО', 'Full name'], position_id: ['Должность', 'Position'],
     phone: ['Телефон', 'Phone'], hire_date: ['Дата приёма', 'Hire date'],
-    login: ['Логин', 'Login'], role_id: ['ID роли', 'Role ID'],
+    login: ['Логин', 'Login'], role_id: ['Роль', 'Role'],
     role_code: ['Роль', 'Role'], role_name: ['Роль', 'Role'], role_type: ['Тип роли', 'Role type'],
-    employee_id: ['ID сотрудника', 'Employee ID'], employee_name: ['Сотрудник', 'Employee'],
+    employee_id: ['Сотрудник', 'Employee'], employee_name: ['Сотрудник', 'Employee'],
     position_name: ['Должность', 'Position'], phone_mask: ['Телефон (маска)', 'Phone (mask)'],
     has_pii: ['ПДн заполнены', 'PII filled'], assigned_count: ['Закреплений', 'Assignments'],
     assigned_names: ['Кто закреплён', 'Assigned to'], is_online: ['Онлайн', 'Online'],
@@ -224,7 +224,7 @@ const COLUMN_LABELS = {
     restores: ['Восстановлений', 'Restores'], origin: ['Источник', 'Origin'],
     must_change_pw: ['Смена пароля', 'Must change pw'], failed_cnt: ['Неуд. входы', 'Failed logins'],
     locked_until: ['Блокировка до', 'Locked until'], last_login_at: ['Последний вход', 'Last login'],
-    occurred_at: ['Когда', 'Occurred at'], user_id: ['ID пользователя', 'User ID'],
+    occurred_at: ['Когда', 'Occurred at'], user_id: ['Пользователь', 'User'],
     entity_name: ['Сущность', 'Entity'], entity_id: ['ID сущности', 'Entity ID'],
     action: ['Действие', 'Action'], before_json: ['Было', 'Before'],
     after_json: ['Стало', 'After'], ip: ['IP', 'IP'], user_agent: ['Агент', 'User agent'],
@@ -1105,6 +1105,7 @@ function showModalError(msg) {
 }
 
 let modalSubmitHandler = null;
+let modalTrigger = null;
 
 async function openModal(cfg) {
     state.modal = cfg;
@@ -1125,8 +1126,10 @@ async function openModal(cfg) {
     if (cfg.note) holder.appendChild(el('p', { class: 'notice', text: cfg.note }));
     holder.appendChild(el('p', { class: 'text-muted', text: t('loading') }));
 
+    modalTrigger = document.activeElement;
     show($('modal'), true);
     document.body.classList.add('has-modal');
+    $('app-view').inert = true; // фон не доступен клавиатуре и скринридеру
 
     const fields = cfg.fields || [];
     const resolved = await resolveFieldOptions(fields);
@@ -1236,6 +1239,9 @@ function collectForm(mode) {
 function closeModal() {
     show($('modal'), false);
     document.body.classList.remove('has-modal');
+    $('app-view').inert = false;
+    if (modalTrigger && document.contains(modalTrigger)) modalTrigger.focus();
+    modalTrigger = null;
     state.modal = null;
     modalSubmitHandler = null;
     const r = state.overrideResolve;
@@ -1863,8 +1869,8 @@ function updateUserChip() {
     const role = u.role || {};
     const code = role.code || '—';
     const name = role.name || '';
-    $('user-role').textContent = name ? (code + ' · ' + name) : code;
-    $('user-role').title = role.type === 'TECHNICAL' ? 'TECHNICAL' : 'BUSINESS';
+    $('user-role').textContent = name || code;
+    $('user-role').title = `${code} · ${role.type === 'TECHNICAL' ? 'TECHNICAL' : 'BUSINESS'}`;
 }
 
 /** Скрыть пункты меню, права на которые отсутствуют (data-permission). */
@@ -2696,7 +2702,7 @@ function renderHome(page) {
         hero.appendChild(el('p', {
             class: warn.length ? 'notice' : 'notice notice-ok',
             text: warn.length
-                ? 'Требует внимания: ' + warn.map((c) => `${c.label} — ${c.value}${c.unit ? ' ' + c.unit : ''}`).join('; ')
+                ? warn.map((c) => `${c.label} — ${c.value}${c.unit ? ' ' + c.unit : ''}`).join('; ')
                 : 'Срочных отклонений нет — показатели в норме.'
         }));
     }

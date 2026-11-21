@@ -25,6 +25,16 @@ const card = (key, label, value, opts = {}) => ({
     tone: opts.tone || null,
 });
 
+/** Русское склонение по числу: 1 сотрудник, 2 сотрудника, 5 сотрудников. */
+function plural(n, one, few, many) {
+    const v = Math.abs(Number(n) || 0);
+    const last = v % 10;
+    const last2 = v % 100;
+    if (last === 1 && last2 !== 11) return one;
+    if (last >= 2 && last <= 4 && (last2 < 12 || last2 > 14)) return few;
+    return many;
+}
+
 /** Скалярный запрос: вернуть первое значение первой строки. */
 async function scalar(sql, params = []) {
     const { rows } = await query(sql, params);
@@ -134,7 +144,7 @@ async function animalCards() {
         card('culled', 'Выбраковано', herd.culled || 0, { unit: 'гол.' }),
         card('assigned', 'Под присмотром', `${assign.covered}/${herd.total || 0}`, {
             unit: 'гол.',
-            hint: `${assign.employees} сотрудник(ов), закреплений ${assign.total}`,
+            hint: `${assign.employees} ${plural(assign.employees, 'сотрудник', 'сотрудника', 'сотрудников')}, закреплений ${assign.total}`,
             tone: assign.covered === herd.total ? 'ok' : 'warn',
         }),
     ];
