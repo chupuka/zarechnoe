@@ -2229,7 +2229,7 @@ function configureFilters(page) {
         }));
         const bar = el('div', { class: 'preset-bar' });
         const sel = el('select', { class: 'field-input preset-select' });
-        sel.appendChild(el('option', { value: '', text: 'Сохранённые фильтры: текущие' }));
+        sel.appendChild(el('option', { value: '', text: 'Фильтры: текущие' }));
         for (const p of presetsFor(state.page)) {
             sel.appendChild(el('option', { value: p.name, text: p.name }));
         }
@@ -2680,6 +2680,46 @@ function updatePager() {
     if (lim) lim.value = String(state.limit);
 }
 
+/** Что и如何从 данных отчёта считается — рядом с таблицей и графиком. */
+const REPORT_NOTES = {
+    'cost-fcr': {
+        formula: 'FCR = корм, кг / прирост живой массы, кг. Себестоимость группы = стоимость корма + стоимость лечения; в расчёте на голову делится на голосо-дни (head_days).',
+        source: 'Источник: period_group_cost + period_closure (только закрытые периоды).',
+        hint: 'Чем ниже FCR, тем лучше конверсия корма. Столбец fcr уже посчитан на сервере.'
+    },
+    'herd-health': {
+        formula: 'Доля больных = (НА_ЛЕЧЕНИИ + НА_ОСМОТРЕ + НА_КАРАНТИНЕ) / всё поголовье × 100. Просрочки вакцинации берутся из представления v_vaccination_overdue.',
+        source: 'Источник: animal + animal_group + disposal_event + v_vaccination_overdue.',
+        hint: 'ЗДОРОВ, НА_ПРОДАЖЕ, ПРОДАН в «больных» не входят.'
+    },
+    'pasture-load': {
+        formula: 'Нагрузка = активные головы / площадь участка (га). Превышение — если нагрузка больше нормы max_head_per_ha; отдых проверяется по v_plot_rest_status.',
+        source: 'Источник: pasture_plot + grazing_event + v_plot_rest_status.',
+        hint: 'risk=OVERGRAZING — перевыпас, REST_NOT_COMPLETE — не выдержан срок отдыха.'
+    },
+    'tasks-in-work': {
+        formula: 'В работе — задачи со статусом NEW или IN_WORK. Просрочена, если due_at уже прошел и статус ещё NEW/IN_WORK.',
+        source: 'Источник: task + task_type + employee + task_animal_group + task_execution.',
+        hint: 'Группировки справа показывают распределение по статусам и исполнителям.'
+    },
+    'stock-turnover': {
+        formula: 'Оборот = расход (OUT) / остаток на руках. Дефицит — если остаток ниже min_threshold. Неликвид — расхода нет, а остаток есть.',
+        source: 'Источник: nomenclature + stock_batch + stock_balance + stock_movement.',
+        hint: 'Ближайшая дата годности показана по самой ранней партии.'
+    }
+};
+
+function renderReportNote() {
+    const note = REPORT_NOTES[state.page];
+    if (!note) return;
+    const box = el('details', { class: 'report-note' });
+    box.appendChild(el('summary', { text: 'Как считается этот отчёт' }));
+    box.appendChild(el('p', { class: 'report-note-formula', text: note.formula }));
+    box.appendChild(el('p', { class: 'report-note-source', text: note.source }));
+    if (note.hint) box.appendChild(el('p', { class: 'report-note-hint', text: note.hint }));
+    $('view').appendChild(box);
+}
+
 function renderView(page, result) {
     const holder = $('view');
     clear(holder);
@@ -2702,6 +2742,7 @@ function renderView(page, result) {
         renderTable(Object.assign({}, page, { crud: null, rowActions: [] }), result.rows, t('metric.summary'));
         hideChart();
     } else if (page.kind === 'report') {
+        renderReportNote();
         renderTable(page, result.rows, t('report.table'));
         setupChart(result.series, page);
         addExportButton(page);

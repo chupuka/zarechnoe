@@ -2750,6 +2750,19 @@ body { font-size: var(--fs-base); line-height: 1.55; }
   min-height: 40px;
   font-size: var(--fs-sm);
 }
+.report-note {
+  margin-top: var(--u-2);
+  padding: var(--u-2) var(--u-3);
+  background: var(--surface-sunken);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  font-size: var(--fs-sm);
+}
+.report-note summary { cursor: pointer; font-weight: 650; color: var(--ink-soft); }
+.report-note p { margin: var(--u-2) 0 0; color: var(--ink-soft); }
+.report-note-source { font-size: var(--fs-xs); color: var(--ink-muted); }
+.report-note-hint { font-style: italic; }
+
 .user-info { cursor: pointer; }
 
 body.compact-tables .data-table thead th { padding: 6px var(--u-2); }
