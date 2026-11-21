@@ -1,0 +1,24 @@
+# Секреты и окружение
+.env
+.env.*
+!.env.example
+
+# Данные и артефакты
+backups/
+*.dump
+*.sha256
+*.log
+*.pid
+
+# Зависимости и кэш
+node_modules/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.playwright-mcp/
+
+# Мусор ОС и редакторов
+.DS_Store
+Thumbs.db
+*.swp
+*~
