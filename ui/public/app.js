@@ -18,10 +18,6 @@ const TOKEN_KEY = 'zarechnoe.token';
 const THEME_KEY = 'zarechnoe.theme';
 const LANG_KEY = 'zarechnoe.lang';
 const OVERRIDE_KEY = 'zarechnoe.override';
-// Демо-вход по ссылке ?demo=<логин>: только для демонстрационных аккаунтов.
-const DEMO_LOGINS = ['director', 'superuser', 'dba', 'vet', 'foreman', 'storekeeper',
-    'vet2', 'foreman2', 'storekeeper2'];
-const DEMO_PASSWORD = 'demo1234';
 const DEFAULT_LIMIT = 25;
 const MAX_LIMIT = 200;
 
@@ -4215,21 +4211,7 @@ async function bootstrap() {
 
     let token = null;
     try { token = sessionStorage.getItem(TOKEN_KEY); } catch { /* ignore */ }
-    if (!token) {
-        /* Демо-вход по ссылке: ?demo=vet — без подсказок на экране входа. */
-        const demo = new URLSearchParams(location.search).get('demo');
-        if (demo && DEMO_LOGINS.includes(demo)) {
-            $('login').value = demo;
-            $('password').value = DEMO_PASSWORD;
-            await doLogin({ preventDefault() {} });
-            const url = new URL(location.href);
-            url.searchParams.delete('demo');
-            history.replaceState(null, '', url.toString());
-            return; // doLogin уже показал приложение и выбрал раздел
-        }
-        showLogin('');
-        return;
-    }
+    if (!token) { showLogin(''); return; }
 
     state.token = token;
     try {
