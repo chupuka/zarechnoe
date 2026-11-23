@@ -43,6 +43,8 @@
   --nav-active-fg: var(--green-800);
   --on-primary: var(--white);
   --on-danger: var(--white);
+  --accent-fg: #8A4B00;
+  --placeholder: var(--ink-muted);
 
   /* Производные поверхности и текст */
   --bg: var(--sand-100);
@@ -53,10 +55,10 @@
 
   --ink: var(--ink-900);
   --ink-soft: #53604A;
-  --ink-muted: #7C8770;
+  --ink-muted: #5F6953;
 
   --line: #DCD5C2;
-  --line-strong: #C4BBA1;
+  --line-strong: #7C7A64;
   --line-faint: rgba(30, 41, 22, 0.07);
 
   /* Брендовые оттенки — алиасы на примитивы */
@@ -70,9 +72,9 @@
   --info-soft: var(--blue-100);
 
   /* Статусы животных */
-  --status-healthy: var(--green-700);
+  --status-healthy: var(--green-800);
   --status-healthy-bg: var(--green-100);
-  --status-treatment: #E07B00;
+  --status-treatment: #9A5400;
   --status-treatment-bg: var(--amber-100);
   --status-dead: var(--red-600);
   --status-dead-bg: var(--red-100);
@@ -161,6 +163,8 @@
   --nav-active-fg: var(--green-150);
   --on-primary: var(--white);
   --on-danger: #10160E;
+  --accent-fg: var(--amber-500);
+  --placeholder: var(--ink-muted);
 
   --green-soft: #1E3A20;
   --green-wash: #1A2C1A;
@@ -738,7 +742,7 @@ code, kbd, .mono { font-family: var(--font-mono); font-size: 0.9em; }
               background var(--dur-fast) var(--ease);
 }
 .textarea { min-height: 88px; resize: vertical; line-height: var(--lh-base); }
-.input::placeholder, .textarea::placeholder { color: var(--ink-muted); opacity: 0.85; }
+.input::placeholder, .textarea::placeholder { color: var(--placeholder); }
 .input:hover, .select:hover, .textarea:hover { border-color: var(--link); }
 .input:focus, .select:focus, .textarea:focus {
   outline: none;
@@ -955,7 +959,7 @@ code, kbd, .mono { font-family: var(--font-mono); font-size: 0.9em; }
 }
 .badge-info { background: var(--info-soft); border-color: var(--info); color: var(--info); }
 .badge-neutral { background: var(--surface-sunken); border-color: var(--line-strong); color: var(--ink-soft); }
-.badge-accent { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+.badge-accent { background: var(--accent-soft); border-color: var(--accent); color: var(--accent-fg); }
 .badge-done, .badge[data-status="ВЫПОЛНЕНА"] { background: var(--green-soft); border-color: var(--link); color: var(--link); }
 .badge-overdue { background: var(--danger-soft); border-color: var(--danger); color: var(--danger); }
 
@@ -1713,7 +1717,7 @@ html, body { font-family: var(--font); background-color: var(--bg); color: var(-
   font-size: var(--fs-base);
   transition: border-color var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease);
 }
-.field-input::placeholder { color: var(--ink-muted); opacity: 0.85; }
+.field-input::placeholder { color: var(--placeholder); }
 .field-input:hover { border-color: var(--link); }
 .field-input:focus { outline: none; border-color: var(--link); box-shadow: 0 0 0 3px var(--green-soft); }
 .field-input:disabled { background: var(--surface-sunken); color: var(--ink-muted); }
@@ -2158,7 +2162,7 @@ body.has-modal { overflow: hidden; }
   color: var(--link);
 }
 .toast-err::before { color: var(--danger); }
-.toast-warn::before { color: var(--accent); }
+.toast-warn::before { color: var(--accent-fg); }
 .toast-info::before { color: var(--info); }
 
 /* Состояние загрузки в #view */
@@ -2597,12 +2601,12 @@ body.has-modal { overflow: hidden; }
   --fs-base: 1rem;      /* 16 — было 15 */
   --ink: #17220F;
   --ink-soft: #415038;  /* контраст ~7:1 на песочном фоне */
-  --ink-muted: #5A6650; /* контраст ~5.4:1 — был ~3.3:1 */
+  /* --ink-muted задаётся один раз в токенах (B3/B4) */
 }
 [data-theme="dark"] {
   --ink: #F1F5EC;
   --ink-soft: #C8D4BC;
-  --ink-muted: #A9B79A;
+  /* --ink-muted задаётся один раз в токенах (B3/B4) */
 }
 
 body { font-size: var(--fs-base); line-height: 1.55; }
@@ -3127,7 +3131,7 @@ body.has-modal .fab { opacity: 0; pointer-events: none; transform: scale(0.9); }
 }
 
 /* ---- Кабинет директора: иконки и декорация ---- */
-.quick-link .icon { color: var(--accent); }
+.quick-link .icon { color: var(--accent-fg); }
 .dh-sun {
   position: absolute; right: 6%; top: 18%;
   width: 64px; height: 44px; opacity: 0.65; pointer-events: none;
