@@ -3751,6 +3751,73 @@ const ICON_FOR_PAGE = {
     backups: 'backups', metrics: 'metrics'
 };
 
+/* Ролевые карточки на главной: только VET и FOREMAN, данные из уже существующих отчётов. */
+function roleFocusCode() {
+    const code = String((state.user && state.user.role && state.user.role.code) || '').toUpperCase();
+    return code === 'VET' || code === 'FOREMAN' ? code : null;
+}
+
+function renderRoleFocus() {
+    const code = roleFocusCode();
+    if (!code || !hasPerm('report:READ')) return null;
+    const cfg = code === 'VET'
+        ? {
+            title: 'Здоровье стада и ветконтроль',
+            items: [
+                ['Здоровы', 'herd-health', 'herd.healthy'],
+                ['Требуют внимания', 'inspections', 'herd.sick_or_quarantine'],
+                ['Вакцинация просрочена', 'vaccinations', 'herd.vaccination_overdue']
+            ]
+        }
+        : {
+            title: 'Выпас и состояние участков',
+            items: [
+                ['Участков в выпасе', 'grazing', 'load.active'],
+                ['Перегрузка', 'pasture-load', 'load.over'],
+                ['Отдых не завершён', 'plots', 'load.rest']
+            ]
+        };
+    const box = panel(cfg.title);
+    const grid = el('div', { class: 'focus-grid' });
+    for (const [label, iconName, key] of cfg.items) {
+        grid.appendChild(el('div', { class: 'focus-card', dataset: { focus: key } }, [
+            el('span', { class: 'focus-icon' }, [icon(iconName, '')]),
+            el('span', { class: 'focus-label', text: label }),
+            el('strong', { class: 'focus-value', text: '—' })
+        ]));
+    }
+    box.appendChild(grid);
+    return box;
+}
+
+function setFocusValue(key, value, warn) {
+    const card = [...document.querySelectorAll('.focus-card')].find((n) => n.dataset.focus === key);
+    if (!card) return;
+    const val = card.querySelector('.focus-value');
+    if (val) val.textContent = value === null || value === undefined ? '—' : String(value);
+    card.classList.toggle('warn', !!warn && Number(value) > 0);
+}
+
+async function loadRoleFocusData() {
+    const code = roleFocusCode();
+    if (!code || !hasPerm('report:READ')) return;
+    try {
+        if (code === 'VET') {
+            const r = await api('GET', '/reports/herd-health', undefined, { silent: true });
+            const s = (r && r.series && r.series.summary) || {};
+            setFocusValue('herd.healthy', s.healthy, false);
+            setFocusValue('herd.sick_or_quarantine', s.sick_or_quarantine, true);
+            setFocusValue('herd.vaccination_overdue', s.vaccination_overdue, true);
+        } else {
+            const r = await api('GET', '/reports/pasture-load', undefined, { silent: true });
+            const rows = (r && r.data) || [];
+            setFocusValue('load.active', rows.filter((x) => x.in_use).length, false);
+            setFocusValue('load.over', rows.filter((x) => x.over_limit).length, true);
+            setFocusValue('load.rest', rows.filter((x) => x.rest_ok === false).length, true);
+        }
+    } catch { /* карточки останутся с «—», если отчёт недоступен */ }
+}
+
 function renderHome(page) {
     if (isDirector()) { renderDirectorHome(); return; }
     const holder = $('view');
@@ -3775,6 +3842,8 @@ function renderHome(page) {
     }
     holder.appendChild(hero);
     holder.appendChild(illustration('cow', 'home-art'));
+    const focus = renderRoleFocus();
+    if (focus) holder.appendChild(focus);
 
     const links = HOME_LINKS.filter(([, , perm]) => hasPerm(perm));
     const grid = el('div', { class: 'quick-grid' });
@@ -3792,6 +3861,7 @@ function renderHome(page) {
         class: 'hint',
         text: 'Плашка показателей на каждом экране строится из /stats/:section — только по данным, разрешённым роли.'
     }));
+    loadRoleFocusData();
     hideChart();
 }
 
