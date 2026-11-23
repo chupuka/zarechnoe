@@ -2922,14 +2922,17 @@ body.compact-tables .data-table tbody td { padding: 6px var(--u-2); }
       animation-timeline: --dh-hero;
       animation-range: entry 0% exit 100%;
     }
-    .dh-layer--far { --dh-shift: 26px; }
-    .dh-layer--near { --dh-shift: 10px; }
+    .dh-layer--far { --dh-shift: 10px; }
+    .dh-layer--near { --dh-shift: 6px; }
     .director-stage, .director-reports > * {
       animation: dh-reveal linear both;
       animation-timeline: view();
       animation-range: cover 0% cover 20%;
     }
   }
+}
+@media (max-width: 640px) {
+  .dh-layer { animation: none !important; }
 }
 @keyframes dh-enter {
   from { opacity: 0; transform: translateY(18px); }
@@ -2979,8 +2982,11 @@ body.compact-tables .data-table tbody td { padding: 6px var(--u-2); }
 /* --------------------------------------------------------------------------
    29. Смена страниц — старая страница спускается в затухании, новая — снизу
    -------------------------------------------------------------------------- */
-::view-transition-old(root) { animation: vt-out 320ms var(--ease) both; }
-::view-transition-new(root) { animation: vt-in 320ms var(--ease) both; }
+::view-transition-old(root) { animation: vt-out var(--dur-slow) var(--ease) both; }
+::view-transition-new(root) { animation: vt-in var(--dur-slow) var(--ease) both; }
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(root), ::view-transition-new(root) { animation: none !important; }
+}
 @keyframes vt-out {
   from { opacity: 1; transform: translateY(0); }
   to { opacity: 0; transform: translateY(6px); }

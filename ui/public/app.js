@@ -2521,7 +2521,20 @@ function renderStatStrip(data, series) {
 
 function viewTransitionsReady() {
     return typeof document.startViewTransition === 'function'
+        && !document.hidden
         && !matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
+
+/* Переход — прогрессивное улучшение. Abort/skip не должны сыпать ошибки в консоль. */
+function renderWithTransition(render) {
+    if (!viewTransitionsReady()) { render(); return; }
+    let vt;
+    try { vt = document.startViewTransition(render); }
+    catch { render(); return; }
+    if (vt && vt.ready && typeof vt.ready.catch === 'function') vt.ready.catch(() => {});
+    if (vt && vt.updateCallbackDone && typeof vt.updateCallbackDone.catch === 'function') {
+        vt.updateCallbackDone.catch(() => {});
+    }
 }
 
 /** Мини-график в карточке показателей: ломаная + заливка по значениям. */
@@ -2610,9 +2623,8 @@ async function loadPage() {
         state.perfData = result.perf || null;
         state.herdData = result.herd || null;
         $('view').setAttribute('aria-busy', 'false');
-        const render = () => renderView(page, result);
-        if (viewTransitionsReady()) document.startViewTransition(render);
-        else render();
+        const render = () => { if (ticket === state.requestId) renderView(page, result); };
+        renderWithTransition(render);
     } catch (err) {
         if (ticket !== state.requestId) return;
         $('view').setAttribute('aria-busy', 'false');
