@@ -2139,6 +2139,49 @@ function toggleNotifications(force) {
     if (open) loadNotifications();
 }
 
+function renderSystemStatus(info, ms) {
+    const body = $('sys-body');
+    if (!body) return;
+    clear(body);
+    if (!info) {
+        body.appendChild(el('p', { class: 'notif-empty', text: 'Не удалось получить статус' }));
+        return;
+    }
+    const rows = [
+        ['API', String(info.status || '—').toUpperCase(), info.status === 'ok'],
+        ['База данных', String(info.db || '—').toUpperCase(), info.db === 'up'],
+        ['Время ответа', ms + ' мс', ms < 800],
+        ['Сервер БД', String(info.database || '—'), true]
+    ];
+    for (const [label, value, ok] of rows) {
+        body.appendChild(el('div', { class: 'sys-row' }, [
+            el('i', { class: 'sys-dot' + (ok ? '' : ' bad'), 'aria-hidden': 'true' }),
+            el('span', { class: 'sys-label', text: label }),
+            el('strong', { class: 'sys-value', text: value })
+        ]));
+    }
+    const time = $('sys-time');
+    if (time) time.textContent = 'Проверено ' + new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+}
+
+async function loadSystemStatus() {
+    const start = performance.now();
+    try {
+        const r = await api('GET', '/health', undefined, { silent: true });
+        renderSystemStatus(r, Math.round(performance.now() - start));
+    } catch { renderSystemStatus(null, 0); }
+}
+
+function toggleSystemPanel(force) {
+    const panel = $('sys-panel');
+    if (!panel) return;
+    const open = force === undefined ? panel.hidden : force;
+    show(panel, open);
+    const btn = $('sys-btn');
+    if (btn) btn.setAttribute('aria-expanded', String(open));
+    if (open) loadSystemStatus();
+}
+
 /* --------------------------------------------------------------------------
  * 8. Роутер, фильтры, загрузка данных
  * -------------------------------------------------------------------------- */
@@ -4759,6 +4802,7 @@ function handleKey(e) {
 
     if (e.key === 'Escape') {
         toggleNotifications(false);
+        toggleSystemPanel(false);
         if (state.modal) closeModal();
         else { closeHelp(); hideMap(); $('sidebar').classList.remove('open'); }
         return;
@@ -4841,9 +4885,13 @@ function bindEvents() {
     $('notif-btn').addEventListener('click', (e) => { e.stopPropagation(); toggleNotifications(); });
     $('notif-refresh').addEventListener('click', () => loadNotifications());
     $('notif-read-all').addEventListener('click', () => readAllNotifications());
+    $('sys-btn').addEventListener('click', (e) => { e.stopPropagation(); toggleSystemPanel(); });
+    $('sys-refresh').addEventListener('click', () => loadSystemStatus());
     document.addEventListener('click', (e) => {
         const p = $('notif-panel');
         if (p && !p.hidden && !e.target.closest('#notif-panel') && !e.target.closest('#notif-btn')) toggleNotifications(false);
+        const s = $('sys-panel');
+        if (s && !s.hidden && !e.target.closest('#sys-panel') && !e.target.closest('#sys-btn')) toggleSystemPanel(false);
     });
     $('pager-prev').addEventListener('click', () => { if (state.pageNo > 1) { state.pageNo--; state.offset = (state.pageNo - 1) * state.limit; loadPage(); } });
     $('pager-next').addEventListener('click', () => { state.pageNo++; state.offset = (state.pageNo - 1) * state.limit; loadPage(); });

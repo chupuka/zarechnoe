@@ -260,7 +260,7 @@ code, kbd, .mono { font-family: var(--font-mono); font-size: 0.9em; }
   border-bottom: 1px solid var(--line);
   box-shadow: var(--shadow-1);
   transition: height var(--dur) var(--ease), background var(--dur) var(--ease),
-              box-shadow var(--dur) var(--ease), backdrop-filter var(--dur) var(--ease);
+              box-shadow var(--dur) var(--ease);
 }
 
 /* Тонкая «полевая» полоса под шапкой */
@@ -278,7 +278,6 @@ code, kbd, .mono { font-family: var(--font-mono); font-size: 0.9em; }
 .app-header.scrolled {
   background: color-mix(in srgb, var(--surface-raised) 92%, transparent);
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12);
-  backdrop-filter: blur(10px);
 }
 
 .brand { display: flex; align-items: center; gap: var(--u-2); min-width: 0; }
@@ -2950,13 +2949,13 @@ body.compact-tables .data-table tbody td { padding: 6px var(--u-2); }
   }
 }
 @keyframes dh-enter {
-  from { opacity: 0; transform: translateY(18px); filter: blur(6px); }
+  from { opacity: 0; transform: translateY(18px); }
 }
 @keyframes dh-parallax {
   to { transform: translateY(calc(-1 * var(--dh-shift, 20px))); }
 }
 @keyframes dh-reveal {
-  from { opacity: 0; transform: translateY(24px); filter: blur(8px); }
+  from { opacity: 0; transform: translateY(24px); }
 }
 
 /* --------------------------------------------------------------------------
@@ -3107,3 +3106,31 @@ body.has-modal .fab { opacity: 0; pointer-events: none; transform: scale(0.9); }
   position: absolute; right: 6%; top: 18%;
   width: 64px; height: 44px; opacity: 0.65; pointer-events: none;
 }
+
+/* ---- Тёмная тема: кабинет директора и фон приложения ---- */
+[data-theme="dark"] .app-shell {
+  background:
+    radial-gradient(circle at 1% -3%, rgba(129, 199, 132, 0.07) 0%, transparent 38%),
+    radial-gradient(circle at 98% 102%, rgba(240, 180, 80, 0.04) 0%, transparent 40%),
+    url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='40'%20height='40'%3E%3Ccircle%20cx='2'%20cy='2'%20r='0.7'%20fill='%234a5741'/%3E%3Ccircle%20cx='22'%20cy='6'%20r='0.7'%20fill='%234a5741'/%3E%3Ccircle%20cx='10'%20cy='30'%20r='0.6'%20fill='%234a5741'/%3E%3Ccircle%20cx='30'%20cy='26'%20r='0.6'%20fill='%234a5741'/%3E%3C/svg%3E"),
+    var(--bg);
+}
+[data-theme="dark"] .director-hero {
+  background: linear-gradient(135deg, #0F3212 0%, #1B5E20 58%, #123A16 100%);
+}
+[data-theme="dark"] .dh-notice {
+  background: rgba(0, 0, 0, 0.3);
+  border-color: rgba(245, 241, 230, 0.16);
+}
+
+/* ---- Панель «Статус системы» ---- */
+.sys-body { padding: var(--u-1) 0; }
+.sys-row {
+  display: flex; align-items: center; gap: var(--u-1);
+  padding: var(--u-1) var(--u-2); font-size: var(--fs-sm);
+}
+.sys-dot { width: 8px; height: 8px; flex: 0 0 8px; border-radius: 50%; background: var(--green); }
+.sys-dot.bad { background: var(--danger); }
+.sys-label { color: var(--ink-soft); }
+.sys-value { margin-left: auto; font-variant-numeric: tabular-nums; }
+.sys-time { font-size: var(--fs-xs); color: var(--ink-muted); }

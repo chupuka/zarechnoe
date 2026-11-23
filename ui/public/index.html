@@ -70,6 +70,7 @@
         <symbol id="icon-refresh" viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 1 2.3 5.7M15 6l3 3-3 3"/></symbol>
         <symbol id="icon-plus" viewBox="0 0 24 24"><path d="M12 4v16M4 12h16"/></symbol>
         <symbol id="icon-power" viewBox="0 0 24 24"><path d="M12 4v9M5.5 11a6.5 6.5 0 1 0 13 0"/></symbol>
+        <symbol id="icon-pulse" viewBox="0 0 24 24"><path d="M2 12h4l2.5-6 3 12 3-9 2 3h5.5"/></symbol>
         <symbol id="icon-bell" viewBox="0 0 24 24"><path d="M6 17h12l-1.6-2.4V10a4.4 4.4 0 0 0-8.8 0v4.6L6 17zM10 17v1.5a2 2 0 0 0 4 0V17"/></symbol>
         <symbol id="icon-check" viewBox="0 0 24 24"><path d="M4.5 12.5l5 5 10-11"/></symbol>
         <symbol id="icon-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 15.5h.01"/><path d="M12 9.5l1.2 1.2 1.2-1.2"/></symbol>
@@ -161,6 +162,20 @@
                     title="Палитра действий: все доступные роли операции (Ctrl+K)">
                 <span id="actions-btn-label">Действия</span> <kbd class="key-hint">Ctrl K</kbd>
             </button>
+
+            <div class="notif-wrap">
+                <button id="sys-btn" class="icon-btn sys-btn" type="button" aria-label="Статус системы" aria-expanded="false" title="Статус системы">
+                    <svg class="icon" aria-hidden="true"><use href="#icon-pulse"/></svg>
+                </button>
+                <div id="sys-panel" class="notif-panel" hidden>
+                    <header class="notif-head">
+                        <strong>Статус системы</strong>
+                        <button id="sys-refresh" class="icon-btn" type="button" title="Проверить"><svg class="icon" aria-hidden="true"><use href="#icon-refresh"/></svg></button>
+                    </header>
+                    <div id="sys-body" class="sys-body"></div>
+                    <footer class="notif-foot"><span id="sys-time" class="sys-time">—</span></footer>
+                </div>
+            </div>
 
             <div class="notif-wrap">
                 <button id="notif-btn" class="icon-btn notif-btn" type="button" aria-label="Уведомления" aria-expanded="false" title="Уведомления">
