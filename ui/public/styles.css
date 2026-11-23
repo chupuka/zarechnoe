@@ -2944,7 +2944,7 @@ body.compact-tables .data-table tbody td { padding: 6px var(--u-2); }
     .director-stage, .director-reports > * {
       animation: dh-reveal linear both;
       animation-timeline: view();
-      animation-range: entry 8% cover 32%;
+      animation-range: cover 0% cover 20%;
     }
   }
 }
