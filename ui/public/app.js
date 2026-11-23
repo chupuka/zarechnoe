@@ -437,6 +437,33 @@ function el(tag, props, children) {
 }
 
 function clear(node) { if (node) while (node.firstChild) node.removeChild(node.firstChild); }
+
+/** Иконка из спрайта в index.html: <svg class="icon"><use href="#icon-x"/></svg> */
+function icon(name, className) {
+    const NS = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(NS, 'svg');
+    svg.setAttribute('class', 'icon' + (className ? ' ' + className : ''));
+    svg.setAttribute('aria-hidden', 'true');
+    const use = document.createElementNS(NS, 'use');
+    use.setAttribute('href', '#icon-' + name);
+    svg.appendChild(use);
+    return svg;
+}
+
+/* Простенькие зарисовки (монохромные, currentColor, stroke) — в стиле хозяйства. */
+const ILLUSTRATIONS = {
+    cow: `<ellipse cx="14" cy="16" rx="9" ry="7"/><circle cx="14" cy="6" r="3"/><path d="M7 9v6"/><path d="M21 9v6"/>`,
+    stack: `<path d="M16 3L3 13.5 16 23l13-10z"/><path d="M5.5 21.5L8.5 21"/><path d="M16.5 16.5L14.5 15.5"/><path d="M16.5 16.5L18.5 15.5"/>`,
+    sun: `<circle cx="11" cy="10" r="3.6"/><path d="M11 4v2M11 20v2M15.6 7.4l1.4 1.4M6.4 7.4l1.4 1.4M6.4 16.4l1.4 1.4M15.6 16.4l1.4 1.4M9.4 10l2 2M14 10l2 2M11 13l1.4 1.4M11 16l1.4 1.4"/>`,
+    barn: `<path d="M2 19L13 11L24 19V24H2Z"/><path d="M8 22h8"/>`
+};
+
+function illustration(name, className) {
+    const d = el('div', { class: 'illustration-wrap' });
+    d.insertAdjacentHTML('beforeend',
+        `<svg class="illustration${className ? ' ' + className : ''}" viewBox="0 0 36 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round" aria-hidden="true">${ILLUSTRATIONS[name] || ''}</svg>`);
+    return d.firstChild;
+}
 function show(node, visible) { if (node) node.hidden = !visible; }
 
 /** Обёртка таблицы: доступная область прокрутки (клавиатура + скринридер). */
@@ -1828,11 +1855,20 @@ function setupHeaderMotion() {
     onScroll();
 }
 
+/** Меняет только текстовую подпись, сохраняя SVG-иконку внутри элемента. */
+function setLabel(node, text) {
+    if (!node) return;
+    if (!node.querySelector('svg')) { node.textContent = text; return; }
+    const label = [...node.childNodes].find((n) => n.nodeType === 3);
+    if (label) label.textContent = text;
+    else node.appendChild(document.createTextNode(text));
+}
+
 function applyLang() {
     document.documentElement.lang = state.lang;
     try { localStorage.setItem(LANG_KEY, state.lang); } catch { /* ignore */ }
 
-    const setText = (sel, key) => { const n = document.querySelector(sel); if (n) n.textContent = t(key); };
+    const setText = (sel, key) => setLabel(document.querySelector(sel), t(key));
     setText('#login-submit', 'login.submit');
     setText('#logout-btn', 'logout');
     setText('#refresh-btn', 'refresh');
@@ -1842,8 +1878,7 @@ function applyLang() {
     setText('.login-demo-title', 'login.demo');
     setText('.login-demo-note', 'login.note');
     setText('.login-footer', 'login.footer');
-    const createBtn = $('create-btn');
-    if (createBtn) createBtn.textContent = t('create');
+    setLabel($('create-btn'), t('create'));
     const labels = document.querySelectorAll('#login-form .field-label');
     if (labels[0]) labels[0].textContent = t('login.login');
     if (labels[1]) labels[1].textContent = t('login.password');
@@ -1864,7 +1899,7 @@ function applyLang() {
 
     for (const link of document.querySelectorAll('#sidebar .nav-link[data-view]')) {
         const pair = NAV_LABELS[link.dataset.view];
-        if (pair) link.textContent = state.lang === 'en' ? pair[1] : pair[0];
+        if (pair) setLabel(link, state.lang === 'en' ? pair[1] : pair[0]);
     }
     for (const h of document.querySelectorAll('#sidebar .nav-group-title')) {
         if (!h.dataset.ru) h.dataset.ru = h.textContent.trim();
@@ -2075,9 +2110,11 @@ function renderChrome(page) {
     $('page-title').textContent = pair(page.title);
     state.createAction = currentCreateAction(page);
     const createBtn = $('create-btn');
-    createBtn.textContent = state.createAction
-        ? '+ ' + state.createAction.short + '  [N]'
-        : t('actions.palette') + '  [Ctrl K]';
+    clear(createBtn);
+    createBtn.appendChild(icon('plus', ''));
+    createBtn.appendChild(document.createTextNode(state.createAction
+        ? ` ${state.createAction.short}  [N]`
+        : ` ${t('actions.palette')}  [Ctrl K]`));
     createBtn.title = state.createAction ? state.createAction.hint : 'Все доступные роли действия';
     show(createBtn, !!state.createAction);
 
@@ -2399,6 +2436,7 @@ function setEmpty(errorText) {
     clear(v);
     v.setAttribute('aria-busy', 'false');
     const box = el('div', { class: 'empty-state' }, [
+        illustration('stack', 'empty-art'),
         el('p', { class: 'empty-state-title', text: errorText ? t('errorTitle') : t('empty') }),
         el('p', { text: errorText || t('emptyMsg') })
     ]);
@@ -3170,6 +3208,12 @@ function renderDirectorHome() {
     setupDirectorMotion();
 }
 
+const ICON_FOR_PAGE = {
+    animals: 'animals', tasks: 'tasks', grazing: 'grazing', employees: 'employees',
+    stock: 'stock', dashboard: 'dashboard', 'audit-log': 'audit', 'admin-users': 'users',
+    backups: 'backups', metrics: 'metrics'
+};
+
 function renderHome(page) {
     if (isDirector()) { renderDirectorHome(); return; }
     const holder = $('view');
@@ -3193,14 +3237,15 @@ function renderHome(page) {
         }));
     }
     holder.appendChild(hero);
+    holder.appendChild(illustration('cow', 'home-art'));
 
     const links = HOME_LINKS.filter(([, , perm]) => hasPerm(perm));
     const grid = el('div', { class: 'quick-grid' });
     for (const [id, label] of links) {
-        grid.appendChild(el('button', {
-            class: 'quick-link', type: 'button', text: label,
-            on: { click: () => navigate(id) }
-        }));
+        const btn = el('button', { class: 'quick-link', type: 'button', on: { click: () => navigate(id) } });
+        btn.appendChild(icon(ICON_FOR_PAGE[id] || 'home', ''));
+        btn.appendChild(document.createTextNode(label));
+        grid.appendChild(btn);
     }
     const box = panel('Быстрый переход');
     box.appendChild(grid);

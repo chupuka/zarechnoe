@@ -38,6 +38,41 @@
 </head>
 <body data-api-base="/api/v1" data-theme="light">
 
+    <!-- SVG-спрайт иконок: <svg class="nav-icon"><use href="#icon-animals"/></svg> -->
+    <svg class="sprite-defs" aria-hidden="true" style="display:none">
+        <symbol id="icon-home" viewBox="0 0 24 24"><path d="M3 11l9-8 9 8v10H3ZM7 17h10M9 12h6"/></symbol>
+        <symbol id="icon-animals" viewBox="0 0 24 24"><path d="M12 4c2.4 0 4 2 4 4.2 0 2.2-.8 3.4-1.6 4.5h-6c-.8-1.1-1.6-2.3-1.6-4.5C8.5 6 10 4 12 4zM8.5 8.5v5M15.5 8.5v5"/></symbol>
+        <symbol id="icon-groups" viewBox="0 0 24 24"><path d="M7.5 7a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5zM14.5 7a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5zM3.5 14a3.5 3.5 0 0 1 7 0v1.5a2 2 0 0 1-4 0V14zM14.5 14a3.5 3.5 0 0 1 7 0v1.5a2 2 0 0 1-4 0V14z"/></symbol>
+        <symbol id="icon-inspections" viewBox="0 0 24 24"><ellipse cx="12" cy="11.5" rx="7" ry="4.8"/><circle cx="12" cy="11.5" r="2"/></symbol>
+        <symbol id="icon-vaccinations" viewBox="0 0 24 24"><path d="M9 8h6M16 14h4M13 3v5M13.5 6l-4.5 1M8 10h8a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2z"/></symbol>
+        <symbol id="icon-stock" viewBox="0 0 24 24"><path d="M4 10v8h16v-8zM4 10l8-4 8 4"/></symbol>
+        <symbol id="icon-plots" viewBox="0 0 24 24"><path d="M12 3a6.5 6.5 0 0 1 6.5 6.5c0 4.5-4 8-4 8H9s-4-3.5-4-8A6.5 6.5 0 0 1 12 3z"/><circle cx="12" cy="8" r="1.8"/></symbol>
+        <symbol id="icon-tasks" viewBox="0 0 24 24"><path d="M5 6h12M5 12h12M5 18h6M15.5 15l1.5 1.5 3-3"/></symbol>
+        <symbol id="icon-employees" viewBox="0 0 24 24"><circle cx="12" cy="7" r="3"/><ellipse cx="12" cy="17" rx="5" ry="2.6"/></symbol>
+        <symbol id="icon-grazing" viewBox="0 0 24 24"><ellipse cx="12" cy="10" rx="5" ry="4"/><path d="M7 14l-2 4M10 14l-1.5 4M14 14l1.5 4M17 14l2 4"/></symbol>
+        <symbol id="icon-movements" viewBox="0 0 24 24"><path d="M10 4.5l4-3 4 3M14 3v12M6 19l-4-3 4-3M10 17v-12"/></symbol>
+        <symbol id="icon-dashboard" viewBox="0 0 24 24"><path d="M4 19h16M5 18V12M9 18V7M13 18v-4M17 18v-8"/></symbol>
+        <symbol id="icon-cost-fcr" viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"/><path d="M12 8v5"/></symbol>
+        <symbol id="icon-herd-health" viewBox="0 0 24 24"><path d="M12 3.5a5.5 5.5 0 0 0-7.4 7.8l4.2 4 2.8-2.8 2.2 2.2 3.6-3.8A5.5 5.5 0 0 0 12 3.5z"/></symbol>
+        <symbol id="icon-pasture-load" viewBox="0 0 24 24"><path d="M4 17l2.5-5 2.5 5 2.5-5 2.5 5L20 17"/><path d="M12 12v5"/></symbol>
+        <symbol id="icon-tasks-in-work" viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"/><path d="M12 8v4l2.5 1"/></symbol>
+        <symbol id="icon-stock-turnover" viewBox="0 0 24 24"><path d="M4 10v8h16v-8zM4 10l8-4 8 4"/></symbol>
+        <symbol id="icon-users" viewBox="0 0 24 24"><circle cx="12" cy="8" r="3"/><path d="M6.5 17a5.5 5.5 0 0 0 11 0"/></symbol>
+        <symbol id="icon-roles" viewBox="0 0 24 24"><path d="M12 3l8 4.5v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-8L12 3z"/></symbol>
+        <symbol id="icon-audit" viewBox="0 0 24 24"><rect x="5" y="3" width="12" height="16" rx="2"/><path d="M8 5h5M8 10h5M8 15h4"/></symbol>
+        <symbol id="icon-settings" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M2 12h3M19 12h3M12 2v3M12 19v3M7.4 7.4l2.1 2.1M16.3 16.3l2.1 2.1M7.4 16.6l2.1-2.1M16.3 7.4l2.1-2.1"/></symbol>
+        <symbol id="icon-backups" viewBox="0 0 24 24"><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2M4 8l8-5 8 5v9a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/></symbol>
+        <symbol id="icon-tech-log" viewBox="0 0 24 24"><path d="M4 7h16M6 9l2 2 2-2M6 13l2 2 2-2"/></symbol>
+        <symbol id="icon-metrics" viewBox="0 0 24 24"><path d="M12 3a8 8 0 1 0 0 16M12 11l4 4"/></symbol>
+        <symbol id="icon-dba-migrations" viewBox="0 0 24 24"><ellipse cx="12" cy="6" rx="7" ry="3.2"/><path d="M5 6v5a7 3 0 0 0 14 0V6z"/></symbol>
+        <symbol id="icon-dba-monitor" viewBox="0 0 24 24"><path d="M3 13h3l2-7 2 7h3"/></symbol>
+        <symbol id="icon-dba-backups" viewBox="0 0 24 24"><path d="M5 4h14a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2zM5 10v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/></symbol>
+        <symbol id="icon-refresh" viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 1 2.3 5.7M15 6l3 3-3 3"/></symbol>
+        <symbol id="icon-plus" viewBox="0 0 24 24"><path d="M12 4v16M4 12h16"/></symbol>
+        <symbol id="icon-power" viewBox="0 0 24 24"><path d="M12 4v9M5.5 11a6.5 6.5 0 1 0 13 0"/></symbol>
+        <symbol id="icon-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 15.5h.01"/><path d="M12 9.5l1.2 1.2 1.2-1.2"/></symbol>
+    </svg>
+
     <a href="#content" class="skip-link">Перейти к содержимому</a>
 
     <!-- ============================================================
@@ -131,7 +166,7 @@
                 <span class="theme-switch-label" id="theme-label">Светлая</span>
             </label>
 
-            <button id="logout-btn" class="btn btn-ghost" type="button">Выйти</button>
+            <button id="logout-btn" class="btn btn-ghost" type="button"><svg class="icon" aria-hidden="true"><use href="#icon-power"/></svg>Выйти</button>
         </header>
 
         <!-- ---------- Боковое меню ----------
@@ -153,60 +188,60 @@
                 <section class="nav-group" aria-labelledby="nav-home">
                     <h2 id="nav-home" class="nav-group-title">Обзор</h2>
                     <ul class="nav-list">
-                        <li><a class="nav-link" href="#/home" data-view="home" data-endpoint="/stats/main">Главная</a></li>
+                        <li><a class="nav-link" href="#/home" data-view="home" data-endpoint="/stats/main"><svg class="nav-icon"><use href="#icon-home"/></svg>Главная</a></li>
                     </ul>
                 </section>
 
                 <section class="nav-group" aria-labelledby="nav-reg">
                     <h2 id="nav-reg" class="nav-group-title">Реестры</h2>
                     <ul class="nav-list">
-                        <li><a class="nav-link" href="#/animals"     data-view="animals"     data-endpoint="/animals"          data-permission="animal:READ">Животные</a></li>
-                        <li><a class="nav-link" href="#/groups"      data-view="groups"      data-endpoint="/species"          data-permission="group:READ">Группы</a></li>
-                        <li><a class="nav-link" href="#/inspections" data-view="inspections" data-endpoint="/animals"          data-permission="health:READ">Осмотры</a></li>
-                        <li><a class="nav-link" href="#/vaccinations"data-view="vaccinations"data-endpoint="/animals"          data-permission="health:READ">Вакцинации</a></li>
-                        <li><a class="nav-link" href="#/stock"       data-view="stock"       data-endpoint="/stock/batches"    data-permission="stock:READ">Склад</a></li>
-                        <li><a class="nav-link" href="#/plots"       data-view="plots"       data-endpoint="/pasture-plots"    data-permission="pasture:READ">Участки</a></li>
-                        <li><a class="nav-link" href="#/tasks"       data-view="tasks"       data-endpoint="/tasks"           data-permission="task:READ">Задачи</a></li>
-                        <li><a class="nav-link" href="#/employees"   data-view="employees"   data-endpoint="/employees"       data-permission="employee:READ">Сотрудники</a></li>
+                        <li><a class="nav-link" href="#/animals"     data-view="animals"     data-endpoint="/animals"          data-permission="animal:READ"><svg class="nav-icon"><use href="#icon-animals"/></svg>Животные</a></li>
+                        <li><a class="nav-link" href="#/groups"      data-view="groups"      data-endpoint="/species"          data-permission="group:READ"><svg class="nav-icon"><use href="#icon-groups"/></svg>Группы</a></li>
+                        <li><a class="nav-link" href="#/inspections" data-view="inspections" data-endpoint="/animals"          data-permission="health:READ"><svg class="nav-icon"><use href="#icon-inspections"/></svg>Осмотры</a></li>
+                        <li><a class="nav-link" href="#/vaccinations"data-view="vaccinations"data-endpoint="/animals"          data-permission="health:READ"><svg class="nav-icon"><use href="#icon-vaccinations"/></svg>Вакцинации</a></li>
+                        <li><a class="nav-link" href="#/stock"       data-view="stock"       data-endpoint="/stock/batches"    data-permission="stock:READ"><svg class="nav-icon"><use href="#icon-stock"/></svg>Склад</a></li>
+                        <li><a class="nav-link" href="#/plots"       data-view="plots"       data-endpoint="/pasture-plots"    data-permission="pasture:READ"><svg class="nav-icon"><use href="#icon-plots"/></svg>Участки</a></li>
+                        <li><a class="nav-link" href="#/tasks"       data-view="tasks"       data-endpoint="/tasks"           data-permission="task:READ"><svg class="nav-icon"><use href="#icon-tasks"/></svg>Задачи</a></li>
+                        <li><a class="nav-link" href="#/employees"   data-view="employees"   data-endpoint="/employees"       data-permission="employee:READ"><svg class="nav-icon"><use href="#icon-employees"/></svg>Сотрудники</a></li>
                     </ul>
                 </section>
 
                 <section class="nav-group" aria-labelledby="nav-ops">
                     <h2 id="nav-ops" class="nav-group-title">Операции</h2>
                     <ul class="nav-list">
-                        <li><a class="nav-link" href="#/grazing"   data-view="grazing"   data-endpoint="/pasture-plots" data-permission="pasture:WRITE" data-ops="grazing">Выпас</a></li>
-                        <li><a class="nav-link" href="#/movements" data-view="movements" data-endpoint="/stock/balances" data-permission="stock:WRITE"  data-ops="movements">Движения склада</a></li>
+                        <li><a class="nav-link" href="#/grazing"   data-view="grazing"   data-endpoint="/pasture-plots" data-permission="pasture:WRITE" data-ops="grazing"><svg class="nav-icon"><use href="#icon-grazing"/></svg>Выпас</a></li>
+                        <li><a class="nav-link" href="#/movements" data-view="movements" data-endpoint="/stock/balances" data-permission="stock:WRITE"  data-ops="movements"><svg class="nav-icon"><use href="#icon-movements"/></svg>Движения склада</a></li>
                     </ul>
                 </section>
 
                 <section class="nav-group" aria-labelledby="nav-an">
                     <h2 id="nav-an" class="nav-group-title">Аналитика</h2>
                     <ul class="nav-list">
-                        <li><a class="nav-link" href="#/dashboard"    data-view="dashboard"    data-endpoint="/reports/dashboard"      data-permission="report:READ" data-report="1">Дашборд</a></li>
-                        <li><a class="nav-link" href="#/cost-fcr"     data-view="cost-fcr"     data-endpoint="/reports/cost-fcr"       data-permission="report:READ" data-report="1">Себестоимость и FCR</a></li>
-                        <li><a class="nav-link" href="#/herd-health"  data-view="herd-health"  data-endpoint="/reports/herd-health"    data-permission="report:READ" data-report="1">Здоровье</a></li>
-                        <li><a class="nav-link" href="#/pasture-load" data-view="pasture-load" data-endpoint="/reports/pasture-load"   data-permission="report:READ" data-report="1">Нагрузка на пастбища</a></li>
-                        <li><a class="nav-link" href="#/tasks-in-work"data-view="tasks-in-work"data-endpoint="/reports/tasks-in-work"  data-permission="report:READ" data-report="1">Задачи в работе</a></li>
-                        <li><a class="nav-link" href="#/stock-turnover"data-view="stock-turnover"data-endpoint="/reports/stock-turnover" data-permission="report:READ" data-report="1">Остатки склада</a></li>
+                        <li><a class="nav-link" href="#/dashboard"    data-view="dashboard"    data-endpoint="/reports/dashboard"      data-permission="report:READ" data-report="1"><svg class="nav-icon"><use href="#icon-dashboard"/></svg>Дашборд</a></li>
+                        <li><a class="nav-link" href="#/cost-fcr"     data-view="cost-fcr"     data-endpoint="/reports/cost-fcr"       data-permission="report:READ" data-report="1"><svg class="nav-icon"><use href="#icon-cost-fcr"/></svg>Себестоимость и FCR</a></li>
+                        <li><a class="nav-link" href="#/herd-health"  data-view="herd-health"  data-endpoint="/reports/herd-health"    data-permission="report:READ" data-report="1"><svg class="nav-icon"><use href="#icon-herd-health"/></svg>Здоровье</a></li>
+                        <li><a class="nav-link" href="#/pasture-load" data-view="pasture-load" data-endpoint="/reports/pasture-load"   data-permission="report:READ" data-report="1"><svg class="nav-icon"><use href="#icon-pasture-load"/></svg>Нагрузка на пастбища</a></li>
+                        <li><a class="nav-link" href="#/tasks-in-work"data-view="tasks-in-work"data-endpoint="/reports/tasks-in-work"  data-permission="report:READ" data-report="1"><svg class="nav-icon"><use href="#icon-tasks-in-work"/></svg>Задачи в работе</a></li>
+                        <li><a class="nav-link" href="#/stock-turnover"data-view="stock-turnover"data-endpoint="/reports/stock-turnover" data-permission="report:READ" data-report="1"><svg class="nav-icon"><use href="#icon-stock-turnover"/></svg>Остатки склада</a></li>
                     </ul>
                 </section>
 
                 <section class="nav-group" aria-labelledby="nav-adm">
                     <h2 id="nav-adm" class="nav-group-title">Администрирование</h2>
                     <ul class="nav-list">
-                        <li><a class="nav-link" href="#/users"    data-view="admin-users" data-endpoint="/admin/users"      data-permission="user:READ">Пользователи</a></li>
-                        <li><a class="nav-link" href="#/roles"    data-view="roles"    data-endpoint="/admin/roles"      data-permission="user:READ">Роли и права</a></li>
-                        <li><a class="nav-link" href="#/audit"    data-view="audit-log" data-endpoint="/admin/audit-log"  data-permission="audit:READ">Журнал аудита</a></li>
-                        <li><a class="nav-link" href="#/settings" data-view="settings" data-endpoint="/admin/settings"   data-permission="settings:READ">Настройки</a></li>
+                        <li><a class="nav-link" href="#/users"    data-view="admin-users" data-endpoint="/admin/users"      data-permission="user:READ"><svg class="nav-icon"><use href="#icon-users"/></svg>Пользователи</a></li>
+                        <li><a class="nav-link" href="#/roles"    data-view="roles"    data-endpoint="/admin/roles"      data-permission="user:READ"><svg class="nav-icon"><use href="#icon-roles"/></svg>Роли и права</a></li>
+                        <li><a class="nav-link" href="#/audit"    data-view="audit-log" data-endpoint="/admin/audit-log"  data-permission="audit:READ"><svg class="nav-icon"><use href="#icon-audit"/></svg>Журнал аудита</a></li>
+                        <li><a class="nav-link" href="#/settings" data-view="settings" data-endpoint="/admin/settings"   data-permission="settings:READ"><svg class="nav-icon"><use href="#icon-settings"/></svg>Настройки</a></li>
                     </ul>
                 </section>
 
                 <section class="nav-group" aria-labelledby="nav-tech">
                     <h2 id="nav-tech" class="nav-group-title">Технадминка</h2>
                     <ul class="nav-list">
-                        <li><a class="nav-link" href="#/backups"  data-view="backups"  data-endpoint="/tech/backups/overview" data-permission="backup:READ" data-tech="1">Резервные копии</a></li>
-                        <li><a class="nav-link" href="#/tech-log" data-view="tech-log" data-endpoint="/tech/log"          data-permission="tech:READ"   data-tech="1">Тех. лог</a></li>
-                        <li><a class="nav-link" href="#/metrics"  data-view="metrics"  data-endpoint="/tech/metrics/perf" data-permission="tech:READ"   data-tech="1">Скорость БД</a></li>
+                        <li><a class="nav-link" href="#/backups"  data-view="backups"  data-endpoint="/tech/backups/overview" data-permission="backup:READ" data-tech="1"><svg class="nav-icon"><use href="#icon-backups"/></svg>Резервные копии</a></li>
+                        <li><a class="nav-link" href="#/tech-log" data-view="tech-log" data-endpoint="/tech/log"          data-permission="tech:READ"   data-tech="1"><svg class="nav-icon"><use href="#icon-tech-log"/></svg>Тех. лог</a></li>
+                        <li><a class="nav-link" href="#/metrics"  data-view="metrics"  data-endpoint="/tech/metrics/perf" data-permission="tech:READ"   data-tech="1"><svg class="nav-icon"><use href="#icon-metrics"/></svg>Скорость БД</a></li>
                     </ul>
                     <p class="nav-note">Запросы техролей → <code>X-Override-Reason</code></p>
                 </section>
@@ -214,9 +249,9 @@
                 <section class="nav-group" aria-labelledby="nav-dba">
                     <h2 id="nav-dba" class="nav-group-title">Администратор БД</h2>
                     <ul class="nav-list">
-                        <li><a class="nav-link" href="#/dba-migrations" data-view="dba-migrations" data-endpoint="/dba/migrations" data-permission="dba:READ" data-tech="1">Миграции схемы</a></li>
-                        <li><a class="nav-link" href="#/dba-monitor"    data-view="dba-monitor"    data-endpoint="/dba/monitor/health" data-permission="dba:READ" data-tech="1">Мониторинг БД</a></li>
-                        <li><a class="nav-link" href="#/dba-backups"    data-view="dba-backups"    data-endpoint="/dba/backups/files" data-permission="dba:READ" data-tech="1">Копии на диске</a></li>
+                        <li><a class="nav-link" href="#/dba-migrations" data-view="dba-migrations" data-endpoint="/dba/migrations" data-permission="dba:READ" data-tech="1"><svg class="nav-icon"><use href="#icon-dba-migrations"/></svg>Миграции схемы</a></li>
+                        <li><a class="nav-link" href="#/dba-monitor"    data-view="dba-monitor"    data-endpoint="/dba/monitor/health" data-permission="dba:READ" data-tech="1"><svg class="nav-icon"><use href="#icon-dba-monitor"/></svg>Мониторинг БД</a></li>
+                        <li><a class="nav-link" href="#/dba-backups"    data-view="dba-backups"    data-endpoint="/dba/backups/files" data-permission="dba:READ" data-tech="1"><svg class="nav-icon"><use href="#icon-dba-backups"/></svg>Копии на диске</a></li>
                     </ul>
                     <p class="nav-note">Техлог отдельно от бизнес-аудита</p>
                 </section>
@@ -232,8 +267,8 @@
                     <h1 id="page-title" class="page-title">Животные</h1>
                 </div>
                 <div id="page-actions" class="page-actions">
-                    <button id="refresh-btn" class="btn btn-ghost" type="button" data-hotkey="r">Обновить</button>
-                    <button id="create-btn" class="btn btn-primary" type="button" data-hotkey="n" hidden>+ Создать</button>
+                    <button id="refresh-btn" class="btn btn-ghost" type="button" data-hotkey="r"><svg class="icon" aria-hidden="true"><use href="#icon-refresh"/></svg>Обновить</button>
+                    <button id="create-btn" class="btn btn-primary" type="button" data-hotkey="n" hidden><svg class="icon" aria-hidden="true"><use href="#icon-plus"/></svg>Создать</button>
                 </div>
             </div>
 
@@ -246,6 +281,7 @@
             <!-- Таблицы / карточки / отчёты рендерятся сюда -->
             <section id="view" class="view" aria-live="polite" aria-busy="false">
                 <div class="empty-state">
+                    <svg class="icon empty-art" aria-hidden="true"><use href="#icon-home"/></svg>
                     <p class="empty-state-title">Выберите раздел</p>
                     <p>Данные загружаются из <code>/api/v1</code> после входа в систему.</p>
                 </div>
