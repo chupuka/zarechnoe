@@ -2892,7 +2892,224 @@ const HOME_LINKS = [
     ['backups', 'Резервные копии', 'backup:READ'], ['metrics', 'Скорость БД', 'tech:READ']
 ];
 
+/* --------------------------------------------------------------------------
+ * Кабинет директора: карта + аналитика в первом экране, отчёты ниже.
+ * -------------------------------------------------------------------------- */
+let directorScrollHandler = null;
+const DIRECTOR_CHART_COLORS = ['#2E7D32', '#FF8F00', '#B3261E', '#2C5D7C', '#7C8770', '#C4BBA1'];
+
+function isDirector() {
+    return String((state.user && state.user.role && state.user.role.code) || '').toUpperCase() === 'DIRECTOR';
+}
+
+function drawDirectorDonut(canvas, rows) {
+    const ctx = canvas && canvas.getContext('2d');
+    if (!ctx || !rows || !rows.length) return;
+    const w = canvas.clientWidth || 240;
+    const h = canvas.clientHeight || 240;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width = Math.round(w * dpr);
+    canvas.height = Math.round(h * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, w, h);
+    const total = rows.reduce((s, r) => s + (Number(r.count) || 0), 0) || 1;
+    const colors = DIRECTOR_CHART_COLORS;
+    const cx = w / 2, cy = h / 2, r = Math.min(w, h) / 2 - 8;
+    let a = -Math.PI / 2;
+    rows.forEach((row, i) => {
+        const step = (Number(row.count) || 0) / total * Math.PI * 2;
+        if (!step) return;
+        ctx.beginPath();
+        ctx.arc(cx, cy, r, a, a + step);
+        ctx.arc(cx, cy, r * 0.64, a + step, a, true);
+        ctx.closePath();
+        ctx.fillStyle = colors[i % colors.length];
+        ctx.fill();
+        a += step;
+    });
+    const style = getComputedStyle(document.body);
+    ctx.textAlign = 'center';
+    ctx.fillStyle = style.color;
+    ctx.font = '700 26px ' + style.fontFamily;
+    ctx.fillText(String(total), cx, cy + 4);
+    ctx.font = '12px ' + style.fontFamily;
+    ctx.fillText(t('total'), cx, cy + 22);
+}
+
+function drawDirectorBars(canvas, rows) {
+    const ctx = canvas && canvas.getContext('2d');
+    if (!ctx || !rows || !rows.length) return;
+    const w = canvas.clientWidth || 320;
+    const h = canvas.clientHeight || 200;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width = Math.round(w * dpr);
+    canvas.height = Math.round(h * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, w, h);
+    const style = getComputedStyle(document.body);
+    const max = Math.max(1, ...rows.map((r) => Number(r.active_heads) || 0));
+    const pad = 8, rowH = Math.min(28, (h - pad * 2) / rows.length);
+    rows.slice(0, 8).forEach((r, i) => {
+        const y = pad + i * rowH;
+        const value = Number(r.active_heads) || 0;
+        const norm = Number(r.norm_head_per_ha) || 0;
+        const len = Math.max(2, (value / max) * (w - 96));
+        ctx.fillStyle = value > norm && norm > 0 ? '#B3261E' : '#2E7D32';
+        if (ctx.roundRect) { ctx.beginPath(); ctx.roundRect(66, y, len, Math.max(6, rowH - 10), 4); ctx.fill(); }
+        else ctx.fillRect(66, y, len, Math.max(6, rowH - 10));
+        ctx.fillStyle = style.color;
+        ctx.font = '12px ' + style.fontFamily;
+        ctx.textAlign = 'left';
+        ctx.fillText(String(r.plot || '#' + i), 4, y + rowH - 12);
+        ctx.textAlign = 'right';
+        ctx.fillText(String(value), w - 4, y + rowH - 12);
+    });
+}
+
+async function mountDirectorMap() {
+    const ok = await waitForLeaflet();
+    if (!ok) return;
+    renderMap(await loadPlotsWithGeom(), 'director-map');
+}
+
+async function loadDirectorCharts() {
+    try {
+        const res = await api('GET', '/reports/herd-health', undefined, { silent: true });
+        const src = res && res.series && res.series.by_status;
+        if (src && $('director-donut')) {
+            const rows = src.slice().sort((a, b) => (Number(b.count) || 0) - (Number(a.count) || 0));
+            drawDirectorDonut($('director-donut'), rows);
+            const legend = $('director-donut-legend');
+            if (legend) {
+                clear(legend);
+                rows.forEach((row, i) => {
+                    legend.appendChild(el('span', {}, [
+                        el('i', { style: 'background:' + DIRECTOR_CHART_COLORS[i % DIRECTOR_CHART_COLORS.length] }),
+                        document.createTextNode(`${row.status} · ${row.count}`)
+                    ]));
+                });
+            }
+        }
+    } catch { /* нет права на отчёт — блок останется пустым */ }
+    try {
+        const res = await api('GET', '/reports/pasture-load', undefined, { silent: true });
+        if (res && res.series && res.series.bars && $('director-bars')) {
+            drawDirectorBars($('director-bars'), res.series.bars);
+        }
+    } catch { /* нет права на отчёт */ }
+}
+
+/** Parallax-фолбэк только там, где нет нативной scroll-driven анимации. */
+function setupDirectorMotion() {
+    const hero = document.querySelector('.director-hero');
+    if (!hero) return;
+    if (directorScrollHandler) window.removeEventListener('scroll', directorScrollHandler);
+    if (CSS.supports('(animation-timeline: view()) and (animation-range: entry)')
+        || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const layers = [...hero.querySelectorAll('[data-dh-layer]')];
+    directorScrollHandler = () => {
+        const p = Math.min(1, Math.max(0, window.scrollY / Math.max(1, window.innerHeight)));
+        for (const layer of layers) {
+            const shift = Number(layer.dataset.dhLayer || 20) * (1 - p);
+            layer.style.transform = `translateY(${shift}px)`;
+        }
+    };
+    window.addEventListener('scroll', directorScrollHandler, { passive: true });
+    directorScrollHandler();
+}
+
+function renderDirectorHome() {
+    const holder = $('view');
+    show($('stat-strip'), false);
+    const u = state.user || {};
+    const role = (u.role && (u.role.name || u.role.code)) || 'Директор';
+    const hour = new Date().getHours();
+    const greet = hour < 6 ? 'Доброй ночи' : (hour < 12 ? 'Доброе утро' : (hour < 18 ? 'Добрый день' : 'Добрый вечер'));
+
+    const hero = el('section', { class: 'director-hero' });
+    hero.appendChild(el('div', { class: 'dh-layer dh-layer--far', dataset: { dhLayer: '26' } }));
+    hero.appendChild(el('div', { class: 'dh-layer dh-layer--near', dataset: { dhLayer: '10' } }));
+    const inner = el('div', { class: 'dh-inner' });
+    inner.appendChild(el('h2', { class: 'dh-title', text: `${greet}, ${u.full_name || u.login || 'коллега'}` }));
+    inner.appendChild(el('p', { class: 'dh-sub', text: `Роль: ${role} · ${new Date().toLocaleDateString('ru-RU', { day: '2-digit', month: 'long', year: 'numeric' })}` }));
+    const warn = state.statCards.filter((c) => c.tone === 'warn' || c.tone === 'bad');
+    inner.appendChild(el('p', { class: 'dh-notice', text: warn.length
+        ? warn.map((c) => `${c.label} — ${c.value}${c.unit ? ' ' + c.unit : ''}`).join(' · ')
+        : 'Все показатели в норме — отклонений нет.' }));
+    inner.appendChild(el('button', {
+        class: 'dh-cta', type: 'button', text: 'Отчёты и показатели ↓',
+        on: { click: () => { const t = $('director-reports'); if (t) t.scrollIntoView({ behavior: 'smooth', block: 'start' }); } }
+    }));
+    hero.appendChild(inner);
+    holder.appendChild(hero);
+
+    const stage = el('section', { class: 'director-stage' });
+    const mapCard = el('section', { class: 'director-card director-map-card' });
+    mapCard.appendChild(el('header', { class: 'dc-head' }, [
+        el('h3', { text: 'Пастбища хозяйства' }), el('span', { class: 'dc-hint', text: 'OpenStreetMap · контуры участков' })
+    ]));
+    const mapCanvas = el('div', { id: 'director-map', class: 'director-map' });
+    mapCanvas.setAttribute('role', 'region');
+    mapCanvas.setAttribute('aria-label', 'Карта пастбищ');
+    mapCard.appendChild(mapCanvas);
+    const legend = el('div', { class: 'dc-legend' });
+    for (const [color, label] of [
+        ['#2E7D32', 'Занят'], ['#FF8F00', 'Отдых не завершён'], ['#2C5D7C', 'Свободен'], ['#B3261E', 'Перегрузка']
+    ]) {
+        legend.appendChild(el('span', {}, [el('i', { style: 'background:' + color }), document.createTextNode(label)]));
+    }
+    mapCard.appendChild(legend);
+    stage.appendChild(mapCard);
+
+    const chartCard = el('section', { class: 'director-card director-chart-card' });
+    chartCard.appendChild(el('header', { class: 'dc-head' }, [
+        el('h3', { text: 'Поголовье и нагрузка' }), el('span', { class: 'dc-hint', text: 'данные отчётов' })
+    ]));
+    chartCard.appendChild(el('div', { class: 'dc-chart-row' }, [
+        el('div', { class: 'dc-chart' }, [
+            el('span', { class: 'dc-chart-title', text: 'Состояние стада' }),
+            el('canvas', { id: 'director-donut', class: 'dc-donut' }),
+            el('div', { id: 'director-donut-legend', class: 'dc-donut-legend' })
+        ]),
+        el('div', { class: 'dc-chart' }, [
+            el('span', { class: 'dc-chart-title', text: 'Головы по участкам' }),
+            el('canvas', { id: 'director-bars', class: 'dc-bars' })
+        ])
+    ]));
+    stage.appendChild(chartCard);
+    holder.appendChild(stage);
+
+    const reports = el('section', { id: 'director-reports', class: 'director-reports' });
+    reports.appendChild(el('h2', { class: 'dr-title', text: 'Отчёты и показатели' }));
+    const kpis = el('div', { class: 'stat-strip director-kpis' });
+    for (const c of state.statCards) {
+        const value = (typeof c.value === 'number') ? humanNumber(c.value) : String(c.value === null || c.value === undefined ? '—' : c.value);
+        kpis.appendChild(el('div', {
+            class: 'stat-card' + (c.tone ? ' tone-' + c.tone : ''), title: c.hint || c.label
+        }, [
+            el('span', { class: 'stat-label', text: c.label }),
+            el('span', { class: 'stat-value' }, [document.createTextNode(value), c.unit ? el('span', { class: 'stat-unit', text: ' ' + c.unit }) : null]),
+            c.hint ? el('span', { class: 'stat-hint', text: c.hint }) : null
+        ]));
+    }
+    reports.appendChild(kpis);
+    const links = HOME_LINKS.filter(([, , perm]) => hasPerm(perm));
+    const grid = el('div', { class: 'quick-grid' });
+    for (const [id, label] of links) {
+        grid.appendChild(el('button', { class: 'quick-link', type: 'button', text: label, on: { click: () => navigate(id) } }));
+    }
+    const box = panel('Быстрый переход');
+    box.appendChild(grid);
+    reports.appendChild(box);
+    holder.appendChild(reports);
+
+    mountDirectorMap();
+    loadDirectorCharts();
+    setupDirectorMotion();
+}
+
 function renderHome(page) {
+    if (isDirector()) { renderDirectorHome(); return; }
     const holder = $('view');
     const u = state.user || {};
     const role = (u.role && (u.role.name || u.role.code)) || '—';
@@ -3934,12 +4151,8 @@ async function waitForLeaflet(tries) {
     return false;
 }
 
-async function toggleMap(forceShow) {
-    const box = $('map-container');
-    if (forceShow === false || (!box.hidden && forceShow !== true)) { hideMap(); return; }
-    show(box, true);
-    const ok = await waitForLeaflet();
-    if (!ok) { toast(t('map.noLeaflet'), 'err'); return; }
+/** Участки с контурами WKT — общий источник и для карты раздела, и для кабинета. */
+async function loadPlotsWithGeom() {
     let plots = state.plotsCache.length ? state.plotsCache : state.data;
     if (!plots.length) {
         try {
@@ -3947,8 +4160,7 @@ async function toggleMap(forceShow) {
             plots = (r && r.data) || [];
         } catch { plots = []; }
     }
-    /* Список может не содержать WKT — догружаем контуры через /:id. */
-    const withGeom = await Promise.all(plots.slice(0, 30).map(async (p) => {
+    return Promise.all(plots.slice(0, 30).map(async (p) => {
         if (coordsFromPlot(p).length) return p;
         if (state.wktCache.has(String(p.id))) return Object.assign({}, p, { geom_wkt: state.wktCache.get(String(p.id)) });
         try {
@@ -3958,7 +4170,15 @@ async function toggleMap(forceShow) {
         } catch { /* нет права или нет контура */ }
         return p;
     }));
-    renderMap(withGeom);
+}
+
+async function toggleMap(forceShow) {
+    const box = $('map-container');
+    if (forceShow === false || (!box.hidden && forceShow !== true)) { hideMap(); return; }
+    show(box, true);
+    const ok = await waitForLeaflet();
+    if (!ok) { toast(t('map.noLeaflet'), 'err'); return; }
+    renderMap(await loadPlotsWithGeom(), 'map');
 }
 
 function hideMap() {
@@ -4010,11 +4230,12 @@ function popupNode(plot) {
     return box;
 }
 
-function renderMap(plots) {
+function renderMap(plots, canvasId) {
     const L = window.L;
     if (!L) return;
     if (state.map) { try { state.map.remove(); } catch { /* ignore */ } state.map = null; }
-    const canvas = $('map');
+    const canvas = $(canvasId || 'map');
+    if (!canvas) return;
     clear(canvas);
     const map = L.map(canvas, { scrollWheelZoom: true }).setView([55.7525, 37.610], 14);
     state.map = map;

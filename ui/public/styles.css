@@ -2799,3 +2799,143 @@ body.compact-tables .data-table tbody td { padding: 6px var(--u-2); }
   .sidebar-search { padding: var(--u-1); }
   .sidebar-search .field-input { font-size: var(--fs-xs); }
 }
+
+/* ==========================================================================
+   26. Кабинет директора — карта и аналитика в первом экране
+   ========================================================================== */
+.director-hero {
+  position: relative;
+  overflow: clip;
+  min-height: 300px;
+  margin-bottom: var(--u-3);
+  padding: var(--u-6) var(--u-5);
+  border-radius: var(--r-lg);
+  background: linear-gradient(135deg, #174D1B 0%, #2E7D32 58%, #1B5E20 100%);
+  color: #F5F1E6;
+  box-shadow: var(--shadow-2);
+}
+.dh-layer { position: absolute; inset: -12%; pointer-events: none; }
+.dh-layer--far {
+  background:
+    radial-gradient(ellipse at 18% 24%, rgba(255, 143, 0, 0.18), transparent 44%),
+    radial-gradient(ellipse at 84% 76%, rgba(245, 241, 230, 0.12), transparent 48%);
+}
+.dh-layer--near {
+  inset: auto -10% -30% -10%;
+  height: 62%;
+  background: repeating-linear-gradient(105deg, transparent 0 22px,
+              rgba(245, 241, 230, 0.07) 22px 23px, transparent 23px 46px);
+  mask-image: linear-gradient(to bottom, transparent, #000 72%);
+}
+.dh-inner { position: relative; z-index: 2; max-width: 68ch; }
+.dh-title {
+  margin: 0 0 var(--u-1);
+  color: #F5F1E6;
+  font-size: clamp(1.75rem, 3.6vw, 3rem);
+  font-weight: 700;
+  letter-spacing: -0.035em;
+  line-height: 1.08;
+}
+.dh-sub { margin: 0 0 var(--u-3); color: rgba(245, 241, 230, 0.86); font-size: var(--fs-sm); }
+.dh-notice {
+  margin: 0 0 var(--u-3);
+  padding: var(--u-2) var(--u-3);
+  border: 1px solid rgba(245, 241, 230, 0.25);
+  border-radius: var(--r);
+  background: rgba(10, 30, 12, 0.28);
+  color: #FFF8E8;
+  font-size: var(--fs-sm);
+}
+.dh-cta {
+  min-height: 44px;
+  padding: var(--u-1) var(--u-3);
+  border: 1px solid #F5F1E6;
+  border-radius: var(--r);
+  background: #F5F1E6;
+  color: #174D1B;
+  font: inherit;
+  font-weight: 650;
+  cursor: pointer;
+  transition: transform 160ms var(--ease), box-shadow 160ms var(--ease);
+}
+.dh-cta:hover { transform: translateY(-2px); box-shadow: 0 8px 22px rgba(0, 0, 0, 0.22); }
+.dh-cta:focus-visible { outline: 3px solid #FF8F00; outline-offset: 3px; }
+
+.director-stage {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+  gap: var(--u-2);
+  margin-bottom: var(--u-3);
+}
+.director-card {
+  min-width: 0;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-2);
+  overflow: hidden;
+}
+.dc-head {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: var(--u-2); flex-wrap: wrap;
+  padding: var(--u-2) var(--u-3);
+  border-bottom: 1px solid var(--line);
+}
+.dc-head h3 { margin: 0; font-size: var(--fs-lg); }
+.dc-hint { color: var(--ink-muted); font-size: var(--fs-xs); }
+.director-map { width: 100%; height: 360px; background: var(--surface-sunken); z-index: 0; }
+.dc-legend, .dc-donut-legend {
+  display: flex; flex-wrap: wrap; gap: var(--u-1) var(--u-2);
+  padding: var(--u-2) var(--u-3);
+  font-size: var(--fs-xs);
+  color: var(--ink-soft);
+}
+.dc-legend span, .dc-donut-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.dc-legend i, .dc-donut-legend i { width: 10px; height: 10px; border-radius: 2px; }
+.dc-chart-row { display: grid; gap: var(--u-2); padding: var(--u-3); }
+.dc-chart { min-width: 0; }
+.dc-chart-title { display: block; margin-bottom: var(--u-1); font-size: var(--fs-sm); font-weight: 650; }
+.dc-donut { display: block; width: 100%; height: 180px; }
+.dc-bars { display: block; width: 100%; height: 190px; }
+
+.director-reports { scroll-margin-top: calc(var(--header-h) + var(--u-2)); }
+.dr-title { margin: 0 0 var(--u-2); font-size: var(--fs-xl); letter-spacing: -0.02em; }
+.director-kpis { margin-bottom: var(--u-3); }
+
+@media (max-width: 1000px) {
+  .director-stage { grid-template-columns: 1fr; }
+  .director-hero { padding: var(--u-4); }
+}
+@media (max-width: 600px) {
+  .director-hero { padding: var(--u-3); min-height: 260px; }
+  .director-map { height: 300px; }
+}
+
+/* Движение — только по запросу и только как прогрессивное улучшение. */
+@media (prefers-reduced-motion: no-preference) {
+  .director-hero { animation: dh-enter 900ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+  @supports ((animation-timeline: view()) and (animation-range: entry)) {
+    .director-hero { view-timeline: --dh-hero; }
+    .dh-layer {
+      animation: dh-parallax linear both;
+      animation-timeline: --dh-hero;
+      animation-range: entry 0% exit 100%;
+    }
+    .dh-layer--far { --dh-shift: 26px; }
+    .dh-layer--near { --dh-shift: 10px; }
+    .director-stage, .director-reports > * {
+      animation: dh-reveal linear both;
+      animation-timeline: view();
+      animation-range: entry 8% cover 32%;
+    }
+  }
+}
+@keyframes dh-enter {
+  from { opacity: 0; transform: translateY(18px); filter: blur(6px); }
+}
+@keyframes dh-parallax {
+  to { transform: translateY(calc(-1 * var(--dh-shift, 20px))); }
+}
+@keyframes dh-reveal {
+  from { opacity: 0; transform: translateY(24px); filter: blur(8px); }
+}
