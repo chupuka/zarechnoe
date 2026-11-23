@@ -2320,14 +2320,14 @@ async function loadStats(page) {
     } catch { return null; }
 }
 
-function renderStatStrip(data) {
+function renderStatStrip(data, series) {
     const box = $('stat-strip');
     clear(box);
     const cards = (data && data.cards) || [];
     if (!cards.length) { show(box, false); return; }
-    for (const c of cards) {
+    cards.forEach((c, idx) => {
         const value = (typeof c.value === 'number') ? humanNumber(c.value) : String(c.value === null || c.value === undefined ? '—' : c.value);
-        box.appendChild(el('div', {
+        const node = el('div', {
             class: 'stat-card' + (c.tone ? ' tone-' + c.tone : ''),
             title: c.hint || c.label
         }, [
@@ -2337,16 +2337,61 @@ function renderStatStrip(data) {
                 c.unit ? el('span', { class: 'stat-unit', text: ' ' + c.unit }) : null
             ]),
             c.hint ? el('span', { class: 'stat-hint', text: c.hint }) : null
-        ]));
-    }
+        ]);
+        const vals = (series && Array.isArray(series[c.key])) ? series[c.key] : null;
+        if (vals && vals.length) {
+            const sp = sparkline(vals, CHART_COLORS[idx % CHART_COLORS.length]);
+            if (sp) node.appendChild(sp);
+        }
+        box.appendChild(node);
+    });
     show(box, true);
+}
+
+function viewTransitionsReady() {
+    return typeof document.startViewTransition === 'function'
+        && !matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
+
+/** Мини-график в карточке показателей: ломаная + заливка по значениям. */
+function sparkline(values, color) {
+    const v = (Array.isArray(values) ? values : []).map((n) => Number(n)).filter((n) => Number.isFinite(n));
+    if (!v.length) return null;
+    const w = 52, h = 16;
+    const min = Math.min(...v), max = Math.max(...v);
+    const span = (max - min) || 1;
+    const n = v.length;
+    const pts = v.map((d, i) => {
+        const x = n > 1 ? (i / (n - 1)) * w : w / 2;
+        const y = h - ((d - min) / span) * h;
+        return `${x.toFixed(1)},${y.toFixed(1)}`;
+    });
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('width', w); svg.setAttribute('height', h);
+    svg.setAttribute('viewBox', `0 0 ${w} ${h}`); svg.setAttribute('class', 'stat-spark');
+    const poly = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+    poly.setAttribute('points', n > 1 ? pts.join(' ') + ` ${w},${h} 0,${h}` : `${w},${h} 0,${h}`);
+    poly.setAttribute('fill', color); poly.setAttribute('fill-opacity', '0.22');
+    const line = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+    line.setAttribute('points', pts.join(' '));
+    line.setAttribute('fill', 'none'); line.setAttribute('stroke', color);
+    line.setAttribute('stroke-width', '1.8'); line.setAttribute('stroke-linejoin', 'round');
+    line.setAttribute('stroke-linecap', 'round');
+    svg.appendChild(poly); svg.appendChild(line);
+    return svg;
 }
 
 function setLoading() {
     const v = $('view');
     clear(v);
     v.setAttribute('aria-busy', 'true');
-    v.appendChild(el('div', { class: 'loading', text: t('loading') }));
+    v.appendChild(el('section', { class: 'skeleton-hero' }, [
+        el('div', { class: 'skeleton skeleton-lg' }),
+        el('div', { class: 'skeleton skeleton-md' })
+    ]));
+    const strip = el('div', { class: 'skeleton-stat-strip' });
+    for (let i = 0; i < 6; i++) strip.appendChild(el('div', { class: 'skeleton skeleton-stat' }));
+    v.appendChild(strip);
 }
 
 function setEmpty(errorText) {
@@ -2383,7 +2428,7 @@ async function loadPage() {
         const stats = await statsPromise;
         if (ticket !== state.requestId) return;
         state.statCards = (stats && stats.cards) || [];
-        renderStatStrip(stats);
+        renderStatStrip(stats, result.series);
         state.data = result.rows || [];
         state.total = Number(result.total !== undefined ? result.total : state.data.length) || 0;
         state.series = result.series || null;
@@ -2393,7 +2438,9 @@ async function loadPage() {
         state.perfData = result.perf || null;
         state.herdData = result.herd || null;
         $('view').setAttribute('aria-busy', 'false');
-        renderView(page, result);
+        const render = () => renderView(page, result);
+        if (viewTransitionsReady()) document.startViewTransition(render);
+        else render();
     } catch (err) {
         if (ticket !== state.requestId) return;
         $('view').setAttribute('aria-busy', 'false');
@@ -4227,10 +4274,19 @@ function renderLegend(hasGeom) {
     if (hasGeom) p.appendChild(document.createTextNode(' · ' + t('map.legend.approx')));
 }
 
+const STATUS_LABELS = { '#B3261E': 'Перегрузка', '#FF8F00': 'Отдых не завершён', '#2E7D32': 'Занят', '#2C5D7C': 'Свободен' };
+
+function plotStatusLabel(plot) {
+    const c = plotColor(plot);
+    return STATUS_LABELS[c] || '';
+}
+
 /** Попап собирается из DOM-узлов (никакого innerHTML с данными). */
 function popupNode(plot) {
     const box = el('div', { style: 'min-width:180px' });
     box.appendChild(el('strong', { text: (plot.plot_no || '#' + plot.id) + ' · ' + (plot.name || '') }));
+    const status = plotStatusLabel(plot);
+    if (status) box.appendChild(el('strong', { class: 'popup-status', text: status }));
     const rows = [
         [labelOf('area_ha'), plot.area_ha], [labelOf('active_head_count'), plot.active_head_count],
         [labelOf('max_head_per_ha'), plot.max_head_per_ha], [labelOf('vegetation_type'), plot.vegetation_type],
@@ -4273,6 +4329,12 @@ function renderMap(plots, canvasId) {
         poly.bindPopup(popupNode(plot));
         poly.on('mouseover', () => poly.setStyle({ weight: 3, fillOpacity: 0.45 }));
         poly.on('mouseout', () => poly.setStyle(style));
+        poly.on('click', () => {
+            poly.openPopup();
+            try { map.fitBounds(L.latLngBounds(latlngs), { padding: [36, 36] }); } catch { /* ignore */ }
+            poly.setStyle({ color: '#174D1B', fillColor: '#FF8F00', fillOpacity: 0.55, weight: 3 });
+            poly.once('popupclose', () => poly.setStyle(style));
+        });
         for (const pt of latlngs) {
             if (Array.isArray(pt) && pt.length >= 2 && Number.isFinite(pt[0]) && Number.isFinite(pt[1])) bounds.push(pt);
         }

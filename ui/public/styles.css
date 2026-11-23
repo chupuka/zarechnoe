@@ -2952,3 +2952,52 @@ body.compact-tables .data-table tbody td { padding: 6px var(--u-2); }
 @keyframes dh-reveal {
   from { opacity: 0; transform: translateY(24px); filter: blur(8px); }
 }
+
+/* --------------------------------------------------------------------------
+   27. Скелеты загрузки — лёгкое движение только при «нет предпочтения»
+   -------------------------------------------------------------------------- */
+.skeleton {
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: linear-gradient(100deg, var(--surface-sunken) 20%, var(--surface-hover) 45%, var(--surface-sunken) 70%);
+  background-size: 200% 100%;
+}
+.skeleton-lg { width: 30%; height: 52px; }
+.skeleton-md { width: 100%; height: 32px; margin-top: var(--u-3); }
+.skeleton-hero { max-width: 58ch; margin-bottom: var(--u-3); }
+.skeleton-stat-strip { display: flex; flex-wrap: wrap; gap: var(--u-1); margin-bottom: var(--u-4); }
+.skeleton-stat { width: 132px; height: 58px; flex: 0 0 132px; }
+@media (prefers-reduced-motion: no-preference) {
+  .skeleton { animation: skeleton-shimmer 1.4s var(--ease) infinite; }
+}
+@keyframes skeleton-shimmer {
+  0% { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
+}
+
+/* --------------------------------------------------------------------------
+   28. Мини-графики (sparkline) в карточках показателей
+   -------------------------------------------------------------------------- */
+.stat-card { position: relative; }
+.stat-spark {
+  position: absolute;
+  right: 7px; top: 7px;
+  opacity: 0.85;
+}
+
+/* Маркер статуса в попапе участка */
+.popup-status { display: block; margin-bottom: 4px; }
+
+/* --------------------------------------------------------------------------
+   29. Смена страниц — старая страница спускается в затухании, новая — снизу
+   -------------------------------------------------------------------------- */
+::view-transition-old(root) { animation: vt-out 320ms var(--ease) both; }
+::view-transition-new(root) { animation: vt-in 320ms var(--ease) both; }
+@keyframes vt-out {
+  from { opacity: 1; transform: translateY(0); }
+  to { opacity: 0; transform: translateY(6px); }
+}
+@keyframes vt-in {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
