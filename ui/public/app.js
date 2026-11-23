@@ -444,6 +444,35 @@ function statusFlag(kind) {
     return el('span', { class: 'tone-flag' + (alert ? ' tone-flag-alert' : ''), text });
 }
 
+/* Иконки плашек показателей — по ключу карточки из /stats/*. */
+const STAT_ICONS = {
+    herd_total: 'animals', total: 'animals', healthy: 'herd-health',
+    herd_sick: 'herd-health', attention: 'herd-health',
+    herd_sale: 'tag', for_sale: 'tag', sold: 'tag',
+    dead: 'x', culled: 'x', assigned: 'employees',
+    tasks_open: 'tasks', tasks: 'tasks', today: 'tasks', new: 'tasks',
+    work: 'tasks-in-work', overdue: 'tasks-in-work', done: 'check',
+    stock_low: 'stock', low: 'stock', expiring: 'tasks-in-work',
+    requests: 'stock', movements: 'movements',
+    backup_last: 'backups', last: 'backups', ok: 'backups',
+    size: 'backups', restores: 'backups', failed: 'x',
+    audit_denies: 'roles', denies: 'roles', blocked: 'roles', locked: 'roles',
+    active: 'employees', dismissed: 'x', online: 'pulse',
+    with_pii: 'audit', must_change: 'settings', day: 'audit',
+    pii_reads: 'audit', elevated: 'power', users: 'users',
+    groups: 'grazing', days: 'tasks-in-work', plots_ready: 'plots',
+    overload: 'pasture-load', pasture_active: 'grazing'
+};
+
+/** Шапка плашки: чип с иконкой + название + бейдж статуса справа. */
+function statCardTop(c) {
+    return el('div', { class: 'stat-top' }, [
+        el('span', { class: 'stat-chip' }, [icon(STAT_ICONS[c.key] || 'dashboard')]),
+        el('span', { class: 'stat-label', text: c.label }),
+        c.tone && c.tone !== 'ok' ? statusFlag(c.tone === 'bad' ? 'alert' : 'warn') : null
+    ]);
+}
+
 function clear(node) { if (node) while (node.firstChild) node.removeChild(node.firstChild); }
 
 /** Иконка из спрайта в index.html: <svg class="icon"><use href="#icon-x"/></svg> */
@@ -1845,7 +1874,7 @@ function applyTheme() {
     document.documentElement.dataset.theme = state.theme;
     document.documentElement.style.colorScheme = state.theme;
     const meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.setAttribute('content', dark ? '#141614' : '#2E7D32');
+    if (meta) meta.setAttribute('content', dark ? '#141614' : '#16A34A');
     const cb = $('theme-toggle');
     if (cb) cb.checked = dark;
     $('theme-label').textContent = dark ? t('theme.dark') : t('theme.light');
@@ -2235,6 +2264,7 @@ function renderChrome(page) {
     $('page-eyebrow').textContent = pair(page.eyebrow);
     $('page-crumb-current').textContent = pair(page.title);
     $('page-title').textContent = pair(page.title);
+    updateRecordsDisclosure(page);
     state.createAction = currentCreateAction(page);
     const createBtn = $('create-btn');
     clear(createBtn);
@@ -2490,10 +2520,34 @@ async function loadStats(page) {
     } catch { return null; }
 }
 
+/** Сигнал сводки: «в норме / внимание / проблема» — цвет дублируется текстом. */
+function updateDigestSignal(cards) {
+    const digest = $('section-digest');
+    const signal = $('digest-signal');
+    if (!digest || !signal) return;
+    if (!cards.length) { show(digest, false); show(signal, false); return; }
+    show(digest, true);
+    show(signal, true);
+    const bad = cards.filter((c) => c.tone === 'bad').length;
+    const warn = cards.filter((c) => c.tone === 'warn').length;
+    const pair = (ru, en) => state.lang === 'en' ? en : ru;
+    signal.classList.remove('is-warn', 'is-bad');
+    if (bad) {
+        signal.classList.add('is-bad');
+        signal.textContent = state.lang === 'en' ? `${bad} issues`
+            : `${bad} ${directorPlural(bad, 'проблема', 'проблемы', 'проблем')}`;
+    } else if (warn) {
+        signal.classList.add('is-warn');
+        signal.textContent = state.lang === 'en' ? `${warn} to review`
+            : `${warn} ${directorPlural(warn, 'сигнал', 'сигнала', 'сигналов')}`;
+    } else { signal.textContent = pair('в норме', 'on track'); }
+}
+
 function renderStatStrip(data, series) {
     const box = $('stat-strip');
     clear(box);
     const cards = (data && data.cards) || [];
+    updateDigestSignal(cards);
     if (!cards.length) { show(box, false); return; }
     cards.forEach((c, idx) => {
         const value = (typeof c.value === 'number') ? humanNumber(c.value) : String(c.value === null || c.value === undefined ? '—' : c.value);
@@ -2501,13 +2555,12 @@ function renderStatStrip(data, series) {
             class: 'stat-card' + (c.tone ? ' tone-' + c.tone : ''),
             title: c.hint || c.label
         }, [
-            el('span', { class: 'stat-label', text: c.label }),
+            statCardTop(c),
             el('span', { class: 'stat-value' }, [
                 document.createTextNode(value),
                 c.unit ? el('span', { class: 'stat-unit', text: ' ' + c.unit }) : null
             ]),
-            c.hint ? el('span', { class: 'stat-hint', text: c.hint }) : null,
-            c.tone && c.tone !== 'ok' ? statusFlag(c.tone === 'bad' ? 'alert' : 'warn') : null
+            c.hint ? el('span', { class: 'stat-hint', text: c.hint }) : null
         ]);
         const vals = (series && Array.isArray(series[c.key])) ? series[c.key] : null;
         if (vals && vals.length) {
@@ -2915,10 +2968,30 @@ function renderKpi(rows, keys) {
     $('view').appendChild(grid);
 }
 
+let recordsDisclosurePage = null;
+
+/** Длинные списки свёрнуты в «Реестр»; сводка остаётся на виду. */
+function updateRecordsDisclosure(page, total) {
+    const box = $('records-disclosure');
+    const summary = $('records-summary');
+    if (!box || !summary) return;
+    /* Отчёты и дашборды оставляем открытыми: там canvas графикам нужна ширина. */
+    const collapsible = !!page && ['table', 'metrics'].includes(page.kind);
+    summary.hidden = !collapsible;
+    if (!collapsible) { box.open = true; return; }
+    if (recordsDisclosurePage !== state.page) {
+        recordsDisclosurePage = state.page;
+        box.open = false;
+    }
+    const count = humanNumber(total !== undefined ? total : state.total);
+    summary.textContent = state.lang === 'en' ? `Records · ${count}` : `Реестр · ${count}`;
+}
+
 function updatePager() {
     const page = currentPage();
     const total = state.total;
     const pages = Math.max(1, Math.ceil(total / state.limit));
+    updateRecordsDisclosure(page, total);
     if (state.pageNo > pages) { state.pageNo = pages; state.offset = (pages - 1) * state.limit; }
     const pager = $('pager');
     if (page && page.noPager) { show(pager, false); return; }
@@ -3148,7 +3221,10 @@ const HOME_LINKS = [
  * Кабинет директора: карта + аналитика в первом экране, отчёты ниже.
  * -------------------------------------------------------------------------- */
 let directorScrollHandler = null;
-const DIRECTOR_CHART_COLORS = ['#2E7D32', '#FF8F00', '#B3261E', '#2C5D7C', '#7C8770', '#C4BBA1'];
+let directorMapController = null;
+let directorPastureRows = [];
+let directorPastureLoaded = false;
+const DIRECTOR_CHART_COLORS = ['#16A34A', '#F59E0B', '#DC2626', '#2563EB', '#64756A', '#C3D4C7'];
 
 function isDirector() {
     return String((state.user && state.user.role && state.user.role.code) || '').toUpperCase() === 'DIRECTOR';
@@ -3207,25 +3283,33 @@ function drawDirectorBars(canvas, rows, animate) {
     canvas.width = Math.round(w * dpr);
     canvas.height = Math.round(h * dpr);
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    const max = Math.max(1, ...rows.map((r) => Number(r.active_heads) || 0));
-    const pad = 8, rowH = Math.min(28, (h - pad * 2) / rows.length);
+    const shown = rows.slice(0, 8);
+    const max = Math.max(1, ...shown.flatMap((r) => [Number(r.load_head_per_ha) || 0, Number(r.norm_head_per_ha) || 0]));
+    const pad = 8, left = 64, right = 44;
+    const plotW = Math.max(40, w - left - right);
+    const rowH = Math.min(28, (h - pad * 2) / shown.length);
     const draw = (p) => {
         ctx.clearRect(0, 0, w, h);
         const style = getComputedStyle(document.body);
-        rows.slice(0, 8).forEach((r, i) => {
+        shown.forEach((r, i) => {
             const y = pad + i * rowH;
-            const value = Number(r.active_heads) || 0;
+            const value = Number(r.load_head_per_ha) || 0;
             const norm = Number(r.norm_head_per_ha) || 0;
-            const len = Math.max(2, (value / max) * (w - 96) * p);
-            ctx.fillStyle = value > norm && norm > 0 ? '#B3261E' : '#2E7D32';
-            if (ctx.roundRect) { ctx.beginPath(); ctx.roundRect(66, y, len, Math.max(6, rowH - 10), 4); ctx.fill(); }
-            else ctx.fillRect(66, y, len, Math.max(6, rowH - 10));
+            const len = Math.max(2, (value / max) * plotW * p);
+            ctx.fillStyle = value > norm && norm > 0 ? '#DC2626' : '#16A34A';
+            if (ctx.roundRect) { ctx.beginPath(); ctx.roundRect(left, y, len, Math.max(6, rowH - 10), 4); ctx.fill(); }
+            else ctx.fillRect(left, y, len, Math.max(6, rowH - 10));
+            if (norm > 0) {
+                const normX = left + (norm / max) * plotW * p;
+                ctx.fillStyle = '#64756A';
+                ctx.fillRect(normX - 1, y - 2, 2, Math.max(10, rowH - 6));
+            }
             ctx.fillStyle = style.color;
             ctx.font = '12px ' + style.fontFamily;
             ctx.textAlign = 'left';
-            ctx.fillText(String(r.plot || '#' + i), 4, y + rowH - 12);
+            ctx.fillText(String(r.plot || r.plot_no || '#' + i), 4, y + rowH - 12);
             ctx.textAlign = 'right';
-            ctx.fillText(String(value), w - 4, y + rowH - 12);
+            ctx.fillText(value.toFixed(1), w - 4, y + rowH - 12);
         });
     };
     if (animate && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
@@ -3251,37 +3335,63 @@ function animateCount(node, target) {
     requestAnimationFrame(tick);
 }
 
-async function mountDirectorMap() {
-    const ok = await waitForLeaflet();
-    if (!ok) return;
-    renderMap(await loadPlotsWithGeom(), 'director-map');
+/** Центрирует участок, выбранный в ленте внимания, и открывает его карточку. */
+function focusDirectorPlot(plotId) {
+    const item = directorMapController && directorMapController.polygons.get(String(plotId));
+    if (!item) return;
+    const canvas = $('director-map');
+    if (canvas) canvas.scrollIntoView({
+        behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+        block: 'center'
+    });
+    item.poly.fire('click');
 }
 
-async function loadDirectorCharts() {
-    try {
-        const res = await api('GET', '/reports/herd-health', undefined, { silent: true });
-        const src = res && res.series && res.series.by_status;
-        if (src && $('director-donut')) {
-            const rows = src.slice().sort((a, b) => (Number(b.count) || 0) - (Number(a.count) || 0));
-            drawDirectorDonut($('director-donut'), rows, true);
-            const legend = $('director-donut-legend');
-            if (legend) {
-                clear(legend);
-                rows.forEach((row, i) => {
-                    legend.appendChild(el('span', {}, [
-                        el('i', { style: 'background:' + DIRECTOR_CHART_COLORS[i % DIRECTOR_CHART_COLORS.length] }),
-                        document.createTextNode(`${row.status} · ${row.count}`)
-                    ]));
-                });
-            }
+/** Загружает единый набор данных кабинета: карта, отчёты, KPI и лента. */
+async function loadDirectorWorkspace() {
+    const ticket = state.requestId;
+    const pastureRequest = hasPerm('report:READ')
+        ? api('GET', '/reports/pasture-load', undefined, { silent: true }).catch(() => null)
+        : Promise.resolve(null);
+    const herdRequest = hasPerm('report:READ')
+        ? api('GET', '/reports/herd-health', undefined, { silent: true }).catch(() => null)
+        : Promise.resolve(null);
+    const leafletReady = waitForLeaflet();
+    const [pastureRes, herdRes, plots, mapReady] = await Promise.all([
+        pastureRequest, herdRequest, loadPlotsWithGeom(), leafletReady
+    ]);
+    if (ticket !== state.requestId || !$('director-map')) return;
+
+    directorPastureRows = (pastureRes && pastureRes.data) || [];
+    directorPastureLoaded = true;
+    state.loadCache = directorPastureRows;
+    updateDirectorPastureMetric();
+    renderDirectorAttention();
+
+    const mapMeta = $('director-map-meta');
+    if (mapMeta) mapMeta.textContent = state.lang === 'en'
+        ? `${plots.length} plots · OSM`
+        : `${plots.length} ${directorPlural(plots.length, 'участок', 'участка', 'участков')} · OSM`;
+    if (mapReady) directorMapController = renderMap(plots, 'director-map') || null;
+
+    const herdRows = herdRes && herdRes.series && herdRes.series.by_status;
+    if (herdRows && $('director-donut')) {
+        const rows = herdRows.slice().sort((a, b) => (Number(b.count) || 0) - (Number(a.count) || 0));
+        drawDirectorDonut($('director-donut'), rows, true);
+        const legend = $('director-donut-legend');
+        if (legend) {
+            clear(legend);
+            rows.forEach((row, i) => {
+                legend.appendChild(el('span', {}, [
+                    el('i', { style: 'background:' + DIRECTOR_CHART_COLORS[i % DIRECTOR_CHART_COLORS.length] }),
+                    document.createTextNode(`${row.status} · ${row.count}`)
+                ]));
+            });
         }
-    } catch { /* нет права на отчёт — блок останется пустым */ }
-    try {
-        const res = await api('GET', '/reports/pasture-load', undefined, { silent: true });
-        if (res && res.series && res.series.bars && $('director-bars')) {
-            drawDirectorBars($('director-bars'), res.series.bars, true);
-        }
-    } catch { /* нет права на отчёт */ }
+    }
+
+    const bars = pastureRes && pastureRes.series && pastureRes.series.bars;
+    if (bars && $('director-bars')) drawDirectorBars($('director-bars'), bars, true);
 }
 
 /** Parallax-фолбэк только там, где нет нативной scroll-driven анимации. */
@@ -3303,9 +3413,207 @@ function setupDirectorMotion() {
     directorScrollHandler();
 }
 
+function directorText(ru, en) { return state.lang === 'en' ? en : ru; }
+
+function directorPlural(n, one, few, many) {
+    const v = Math.abs(Number(n) || 0);
+    const last = v % 10;
+    const last2 = v % 100;
+    if (last === 1 && last2 !== 11) return one;
+    if (last >= 2 && last <= 4 && (last2 < 12 || last2 > 14)) return few;
+    return many;
+}
+
+function openDirectorReports() {
+    const details = $('director-reports');
+    if (!details) return;
+    details.open = true;
+    details.scrollIntoView({
+        behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+        block: 'start'
+    });
+}
+
+/** Превращает реальные карточки /stats/main в действия, а не в дубли KPI. */
+function directorStatAlert(c) {
+    const routes = {
+        herd_sick: ['herd-health', 'Открыть здоровье', 'Open herd health'],
+        tasks_open: ['tasks-in-work', 'К задачам', 'Open tasks'],
+        stock_low: ['stock', 'Открыть склад', 'Open stock'],
+        backup_last: ['backups', 'Открыть копии', 'Open backups'],
+        audit_denies: ['audit-log', 'Открыть аудит', 'Open audit log']
+    };
+    const route = routes[c.key] || ['dashboard', 'Открыть раздел', 'Open section'];
+    let title = c.label;
+    if (c.key === 'tasks_open') title = directorText('Есть просроченные задачи', 'Tasks are overdue');
+    if (c.key === 'stock_low') title = directorText('Запасы ниже минимума', 'Stock is below minimum');
+    if (c.key === 'backup_last') title = directorText('Проверьте резервные копии', 'Check backup status');
+    const value = `${c.value}${c.unit ? ' ' + c.unit : ''}`;
+    return {
+        id: 'stat-' + c.key,
+        tone: c.tone,
+        icon: STAT_ICONS[c.key] || 'bell',
+        title,
+        text: [value, c.hint].filter(Boolean).join(' · '),
+        action: directorText(route[1], route[2]),
+        run: () => navigate(route[0])
+    };
+}
+
+function buildDirectorAlerts() {
+    const alerts = state.statCards
+        .filter((c) => c.tone === 'warn' || c.tone === 'bad')
+        .map(directorStatAlert);
+    const overloaded = directorPastureRows.filter((r) => r.over_limit || r.risk === 'OVERGRAZING');
+    const resting = directorPastureRows.filter((r) => !r.over_limit && (r.rest_ok === false || r.risk === 'REST_NOT_COMPLETE'));
+    for (const [rows, tone, titleRu, titleEn] of [
+        [overloaded, 'bad', 'Перегрузка пастбищ', 'Pastures are overloaded'],
+        [resting, 'warn', 'Отдых участков не завершён', 'Pasture rest is incomplete']
+    ]) {
+        if (!rows.length) continue;
+        const names = rows.map((r) => r.plot_no || ('#' + r.plot_id)).join(' · ');
+        const unit = directorPlural(rows.length, 'участок', 'участка', 'участков');
+        alerts.push({
+            id: 'pasture-' + tone,
+            tone,
+            icon: 'pasture-load',
+            title: directorText(titleRu, titleEn),
+            text: state.lang === 'en' ? `${rows.length} plots · ${names}` : `${rows.length} ${unit} · ${names}`,
+            action: directorText('Показать на карте', 'Show on map'),
+            run: () => focusDirectorPlot(rows[0].plot_id)
+        });
+    }
+    return alerts.sort((a, b) => (a.tone === 'bad' ? -1 : 0) - (b.tone === 'bad' ? -1 : 0));
+}
+
+function renderDirectorAttention() {
+    const list = $('director-attention-list');
+    if (!list) return;
+    const alerts = buildDirectorAlerts();
+    clear(list);
+    if (!alerts.length) {
+        const pending = hasPerm('report:READ') && !directorPastureLoaded;
+        list.appendChild(el('div', { class: 'attention-empty' }, [
+            icon(pending ? 'pulse' : 'check', 'attention-empty-icon'),
+            el('strong', { text: pending ? directorText('Проверяем участки', 'Checking pastures') : directorText('Всё спокойно', 'All clear') }),
+            el('p', { text: pending
+                ? directorText('Ждём отчёт по нагрузке и отдыху пастбищ.', 'Loading pasture load and rest data.')
+                : directorText('Отклонений в доступных показателях нет.', 'No deviations in the available metrics.') })
+        ]));
+    }
+    for (const alert of alerts) {
+        const item = el('button', {
+            class: 'attention-item tone-' + alert.tone,
+            type: 'button',
+            on: { click: alert.run }
+        });
+        item.setAttribute('aria-label', `${alert.title}. ${alert.action}`);
+        item.appendChild(el('span', { class: 'attention-item-head' }, [
+            el('span', { class: 'attention-icon' }, [icon(alert.icon)]),
+            el('strong', { class: 'attention-title', text: alert.title }),
+            el('span', { class: 'attention-arrow', text: '→', 'aria-hidden': 'true' })
+        ]));
+        item.appendChild(el('span', { class: 'attention-text', text: alert.text }));
+        item.appendChild(el('span', { class: 'attention-action', text: alert.action }));
+        list.appendChild(item);
+    }
+    const count = $('director-attention-count');
+    if (count) count.textContent = String(alerts.length);
+    const briefCount = $('dh-attention-count');
+    if (briefCount) briefCount.textContent = String(alerts.length);
+    const summary = $('dh-summary');
+    const pending = hasPerm('report:READ') && !directorPastureLoaded;
+    if (summary) summary.textContent = alerts.length
+        ? directorText('Есть отклонения, с которыми стоит разобраться сегодня.', 'There are deviations to review today.')
+        : (pending
+            ? directorText('Проверяем показатели и состояние пастбищ.', 'Checking metrics and pasture status.')
+            : directorText('Отклонений нет — хозяйство работает штатно.', 'No deviations — the farm is running normally.'));
+    const cta = $('dh-cta');
+    if (cta) cta.textContent = alerts.length
+        ? directorText('Разобрать отклонения', 'Review deviations')
+        : directorText('Открыть показатели', 'Open metrics');
+    const status = $('dh-status');
+    if (status) status.classList.toggle('is-clear', alerts.length === 0 && !pending);
+}
+
+function updateDirectorMetric(node, c, actionLabel) {
+    node.className = 'director-metric' + (c.tone ? ' tone-' + c.tone : '');
+    node.title = c.hint || c.label;
+    clear(node);
+    const value = (typeof c.value === 'number') ? humanNumber(c.value) : String(c.value === null || c.value === undefined ? '—' : c.value);
+    const valueNode = el('span', { class: 'stat-value' }, [
+        document.createTextNode(value),
+        c.unit ? el('span', { class: 'stat-unit', text: ' ' + c.unit }) : null
+    ]);
+    node.appendChild(statCardTop(c));
+    node.appendChild(valueNode);
+    if (c.hint) node.appendChild(el('span', { class: 'stat-hint', text: c.hint }));
+    node.appendChild(el('span', { class: 'metric-action', text: actionLabel + ' →' }));
+    return valueNode;
+}
+
+function updateDirectorPastureMetric() {
+    const node = $('director-pasture-card');
+    if (!node) return;
+    const rows = directorPastureRows;
+    const overloaded = rows.filter((r) => r.over_limit || r.risk === 'OVERGRAZING').length;
+    const resting = rows.filter((r) => !r.over_limit && (r.rest_ok === false || r.risk === 'REST_NOT_COMPLETE')).length;
+    const active = rows.filter((r) => r.in_use || Number(r.active_heads) > 0).length;
+    const card = {
+        key: 'pasture_active',
+        label: directorText('Активный выпас', 'Active grazing'),
+        value: rows.length ? active : '—',
+        unit: rows.length ? directorText(`из ${rows.length}`, `of ${rows.length}`) : null,
+        tone: overloaded ? 'bad' : (resting ? 'warn' : (rows.length ? 'ok' : null)),
+        hint: overloaded
+            ? directorText(`перегрузка: ${overloaded}`, `overloaded: ${overloaded}`)
+            : (resting
+                ? directorText(`отдых не завершён: ${resting}`, `rest incomplete: ${resting}`)
+                : (!directorPastureLoaded
+                    ? directorText('загрузка участков…', 'loading plots…')
+                    : directorText(rows.length ? 'отклонений нет' : 'данные участков недоступны', rows.length ? 'no deviations' : 'plot data unavailable')))
+    };
+    updateDirectorMetric(node, card, directorText('К карте', 'Open map'));
+}
+
+function renderDirectorPrimary() {
+    const grid = $('director-primary');
+    if (!grid) return;
+    clear(grid);
+    const specs = [
+        ['herd_total', 'animals', 'К животным', 'Open animals'],
+        ['herd_sick', 'herd-health', 'К здоровью', 'Herd health'],
+        ['tasks_open', 'tasks-in-work', 'К задачам', 'Open tasks']
+    ];
+    for (const [key, route, actionRu, actionEn] of specs) {
+        const card = state.statCards.find((c) => c.key === key);
+        if (!card) continue;
+        const node = el('button', {
+            class: 'director-metric', type: 'button',
+            on: { click: () => navigate(route) }
+        });
+        const valueNode = updateDirectorMetric(node, card, directorText(actionRu, actionEn));
+        if (typeof card.value === 'number') animateCount(valueNode.firstChild, card.value);
+        grid.appendChild(node);
+    }
+    if (hasPerm('report:READ')) {
+        const pasture = el('button', {
+            id: 'director-pasture-card', class: 'director-metric', type: 'button',
+            on: { click: () => $('director-map') && $('director-map').scrollIntoView({
+                behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'center'
+            }) }
+        });
+        grid.appendChild(pasture);
+        updateDirectorPastureMetric();
+    }
+}
+
 function renderDirectorHome() {
     const holder = $('view');
     show($('stat-strip'), false);
+    directorPastureRows = [];
+    directorPastureLoaded = false;
+    directorMapController = null;
     const u = state.user || {};
     const role = (u.role && (u.role.name || u.role.code)) || 'Директор';
     const hour = new Date().getHours();
@@ -3319,89 +3627,121 @@ function renderDirectorHome() {
     hero.appendChild(sun);
     const inner = el('div', { class: 'dh-inner' });
     inner.appendChild(el('h2', { class: 'dh-title', text: `${greet}, ${u.full_name || u.login || 'коллега'}` }));
-    inner.appendChild(el('p', { class: 'dh-sub', text: `Роль: ${role} · ${new Date().toLocaleDateString('ru-RU', { day: '2-digit', month: 'long', year: 'numeric' })}` }));
-    const warn = state.statCards.filter((c) => c.tone === 'warn' || c.tone === 'bad');
-    inner.appendChild(el('p', { class: 'dh-notice', text: warn.length
-        ? warn.map((c) => `${c.label} — ${c.value}${c.unit ? ' ' + c.unit : ''}`).join(' · ')
-        : 'Все показатели в норме — отклонений нет.' }));
-    inner.appendChild(el('button', {
-        class: 'dh-cta', type: 'button', text: 'Отчёты и показатели ↓',
-        on: { click: () => { const t = $('director-reports'); if (t) t.scrollIntoView({ behavior: 'smooth', block: 'start' }); } }
-    }));
+    inner.appendChild(el('p', { class: 'dh-sub', text: `${role} · ${new Date().toLocaleDateString(state.lang === 'en' ? 'en-US' : 'ru-RU', { day: '2-digit', month: 'long', year: 'numeric' })}` }));
+    inner.appendChild(el('p', { id: 'dh-summary', class: 'dh-notice' }));
+    inner.appendChild(el('div', { class: 'dh-actions' }, [
+        el('button', {
+            id: 'dh-cta', class: 'dh-cta', type: 'button',
+            on: { click: () => {
+                if (buildDirectorAlerts().length) {
+                    const target = $('director-attention');
+                    if (target) target.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'center' });
+                } else openDirectorReports();
+            } }
+        }),
+        el('button', {
+            class: 'dh-secondary', type: 'button', text: directorText('Все показатели', 'All metrics'),
+            on: { click: openDirectorReports }
+        })
+    ]));
     hero.appendChild(inner);
+    hero.appendChild(el('aside', { id: 'dh-status', class: 'dh-status', 'aria-label': directorText('Сводка отклонений', 'Deviation summary') }, [
+        el('span', { class: 'dh-status-label', text: directorText('Сигналов для разбора', 'Signals to review') }),
+        el('strong', { id: 'dh-attention-count', class: 'dh-status-value', text: '0' }),
+        el('span', { class: 'dh-status-note', text: directorText('по данным системы', 'from live system data') })
+    ]));
     holder.appendChild(hero);
+
+    holder.appendChild(el('section', {
+        id: 'director-primary', class: 'director-primary',
+        'aria-label': directorText('Ключевые показатели', 'Key metrics')
+    }));
 
     const stage = el('section', { class: 'director-stage' });
     const mapCard = el('section', { class: 'director-card director-map-card' });
     mapCard.appendChild(el('header', { class: 'dc-head' }, [
-        el('h3', { text: 'Пастбища хозяйства' }), el('span', { class: 'dc-hint', text: 'OpenStreetMap · контуры участков' })
+        el('h2', { text: directorText('Пастбища хозяйства', 'Farm pastures') }),
+        el('span', { id: 'director-map-meta', class: 'dc-hint', text: 'OpenStreetMap' })
     ]));
     const mapCanvas = el('div', { id: 'director-map', class: 'director-map' });
     mapCanvas.setAttribute('role', 'region');
-    mapCanvas.setAttribute('aria-label', 'Карта пастбищ');
+    mapCanvas.setAttribute('aria-label', directorText('Карта пастбищ', 'Pasture map'));
     mapCard.appendChild(mapCanvas);
     const legend = el('div', { class: 'dc-legend' });
-    for (const [color, label] of [
-        ['#2E7D32', 'Занят'], ['#FF8F00', 'Отдых не завершён'], ['#2C5D7C', 'Свободен'], ['#B3261E', 'Перегрузка']
+    for (const [color, labelRu, labelEn] of [
+        ['#16A34A', 'Занят', 'In use'], ['#F59E0B', 'Отдых не завершён', 'Rest incomplete'],
+        ['#2563EB', 'Свободен', 'Free'], ['#DC2626', 'Перегрузка', 'Overloaded']
     ]) {
-        legend.appendChild(el('span', {}, [el('i', { style: 'background:' + color }), document.createTextNode(label)]));
+        legend.appendChild(el('span', {}, [el('i', { style: 'background:' + color }), document.createTextNode(directorText(labelRu, labelEn))]));
     }
     mapCard.appendChild(legend);
     stage.appendChild(mapCard);
 
+    const attention = el('section', { id: 'director-attention', class: 'director-card director-attention-card' });
+    attention.appendChild(el('header', { class: 'dc-head' }, [
+        el('h2', { text: directorText('Требует внимания', 'Needs attention') }),
+        el('span', { id: 'director-attention-count', class: 'attention-count', text: '0' })
+    ]));
+    attention.appendChild(el('div', { id: 'director-attention-list', class: 'attention-list' }));
+    stage.appendChild(attention);
+    holder.appendChild(stage);
+
     const chartCard = el('section', { class: 'director-card director-chart-card' });
     chartCard.appendChild(el('header', { class: 'dc-head' }, [
-        el('h3', { text: 'Поголовье и нагрузка' }), el('span', { class: 'dc-hint', text: 'данные отчётов' })
+        el('h2', { text: directorText('Поголовье и нагрузка', 'Herd and pasture load') }),
+        el('span', { class: 'dc-hint', text: directorText('данные отчётов', 'report data') })
     ]));
     chartCard.appendChild(el('div', { class: 'dc-chart-row' }, [
         el('div', { class: 'dc-chart' }, [
-            el('span', { class: 'dc-chart-title', text: 'Состояние стада' }),
-            el('canvas', { id: 'director-donut', class: 'dc-donut' }),
+            el('span', { class: 'dc-chart-title', text: directorText('Состояние стада', 'Herd status') }),
+            el('canvas', { id: 'director-donut', class: 'dc-donut', 'aria-label': directorText('Диаграмма состояния стада', 'Herd status chart') }),
             el('div', { id: 'director-donut-legend', class: 'dc-donut-legend' })
         ]),
         el('div', { class: 'dc-chart' }, [
-            el('span', { class: 'dc-chart-title', text: 'Головы по участкам' }),
-            el('canvas', { id: 'director-bars', class: 'dc-bars' })
+            el('span', { class: 'dc-chart-title', text: directorText('Нагрузка на пастбища · гол/га', 'Pasture load · head/ha') }),
+            el('span', { class: 'dc-chart-sub', text: directorText('столбец — факт · засечка — норма', 'bar — actual · tick — norm') }),
+            el('canvas', { id: 'director-bars', class: 'dc-bars', 'aria-label': directorText('Нагрузка на пастбища', 'Pasture load chart') })
         ])
     ]));
-    stage.appendChild(chartCard);
-    holder.appendChild(stage);
+    holder.appendChild(chartCard);
 
-    const reports = el('section', { id: 'director-reports', class: 'director-reports' });
-    reports.appendChild(el('h2', { class: 'dr-title', text: 'Отчёты и показатели' }));
+    const primaryKeys = new Set(['herd_total', 'herd_sick', 'tasks_open']);
+    const secondary = state.statCards.filter((c) => !primaryKeys.has(c.key));
+    const reports = el('details', { id: 'director-reports', class: 'director-reports director-all-stats' });
+    reports.appendChild(el('summary', { class: 'director-all-summary' }, [
+        el('span', { text: directorText('Дополнительные показатели и переходы', 'More metrics and shortcuts') }),
+        el('span', { class: 'dc-hint', text: String(secondary.length) })
+    ]));
+    const reportsBody = el('div', { class: 'director-all-body' });
     const kpis = el('div', { class: 'stat-strip director-kpis' });
-    for (const c of state.statCards) {
-        const value = (typeof c.value === 'number') ? humanNumber(c.value) : String(c.value === null || c.value === undefined ? '—' : c.value);
+    for (const c of secondary) {
         const valueNode = el('span', { class: 'stat-value' }, [
-            document.createTextNode(value),
+            document.createTextNode((typeof c.value === 'number') ? humanNumber(c.value) : String(c.value ?? '—')),
             c.unit ? el('span', { class: 'stat-unit', text: ' ' + c.unit }) : null
         ]);
         kpis.appendChild(el('div', {
             class: 'stat-card' + (c.tone ? ' tone-' + c.tone : ''), title: c.hint || c.label
-        }, [
-            el('span', { class: 'stat-label', text: c.label }),
-            valueNode,
-            c.hint ? el('span', { class: 'stat-hint', text: c.hint }) : null,
-            c.tone && c.tone !== 'ok' ? statusFlag(c.tone === 'bad' ? 'alert' : 'warn') : null
-        ]));
+        }, [statCardTop(c), valueNode, c.hint ? el('span', { class: 'stat-hint', text: c.hint }) : null]));
         if (typeof c.value === 'number') animateCount(valueNode.firstChild, c.value);
     }
-    reports.appendChild(kpis);
+    if (secondary.length) reportsBody.appendChild(kpis);
     const links = HOME_LINKS.filter(([, , perm]) => hasPerm(perm));
-    const grid = el('div', { class: 'quick-grid' });
+    const quickGrid = el('div', { class: 'quick-grid' });
     for (const [id, label] of links) {
         const btn = el('button', { class: 'quick-link', type: 'button', on: { click: () => navigate(id) } });
         btn.appendChild(icon(ICON_FOR_PAGE[id] || 'home', ''));
         btn.appendChild(document.createTextNode(label));
-        grid.appendChild(btn);
+        quickGrid.appendChild(btn);
     }
-    const box = panel('Быстрый переход');
-    box.appendChild(grid);
-    reports.appendChild(box);
+    const quickBox = panel(directorText('Быстрый переход', 'Quick links'));
+    quickBox.appendChild(quickGrid);
+    reportsBody.appendChild(quickBox);
+    reports.appendChild(reportsBody);
     holder.appendChild(reports);
 
-    mountDirectorMap();
-    loadDirectorCharts();
+    renderDirectorPrimary();
+    renderDirectorAttention();
+    loadDirectorWorkspace();
     setupDirectorMotion();
 }
 
@@ -4501,10 +4841,10 @@ function plotColor(plot) {
     const heads = Number(plot.active_head_count || lr.active_heads || 0);
     const area = Number(plot.area_ha || lr.area_ha || 0);
     const norm = Number(plot.max_head_per_ha || lr.norm_head_per_ha || 0);
-    if (norm > 0 && area > 0 && heads / area > norm) return '#B3261E';       // перегрузка
-    if (lr.rest_ok === false || lr.risk === 'REST_NOT_COMPLETE') return '#FF8F00'; // отдых не завершён
-    if (heads > 0 || lr.in_use) return '#2E7D32';                              // занят
-    return '#2C5D7C';                                                            // свободен
+    if (norm > 0 && area > 0 && heads / area > norm) return '#DC2626';       // перегрузка
+    if (lr.rest_ok === false || lr.risk === 'REST_NOT_COMPLETE') return '#F59E0B'; // отдых не завершён
+    if (heads > 0 || lr.in_use) return '#16A34A';                              // занят
+    return '#2563EB';                                                            // свободен
 }
 
 function renderLegend(hasGeom) {
@@ -4513,8 +4853,8 @@ function renderLegend(hasGeom) {
     clear(p);
     p.appendChild(document.createTextNode(t('map.legend') + ' · '));
     const items = [
-        ['#2E7D32', 'map.legend.loaded'], ['#FF8F00', 'map.legend.rest'],
-        ['#2C5D7C', 'map.legend.free'], ['#B3261E', 'map.legend.over']
+        ['#16A34A', 'map.legend.loaded'], ['#F59E0B', 'map.legend.rest'],
+        ['#2563EB', 'map.legend.free'], ['#DC2626', 'map.legend.over']
     ];
     for (const [color, key] of items) {
         p.appendChild(el('span', {}, [el('i', { style: 'background:' + color }), document.createTextNode(t(key))]));
@@ -4522,7 +4862,7 @@ function renderLegend(hasGeom) {
     if (hasGeom) p.appendChild(document.createTextNode(' · ' + t('map.legend.approx')));
 }
 
-const STATUS_LABELS = { '#B3261E': 'Перегрузка', '#FF8F00': 'Отдых не завершён', '#2E7D32': 'Занят', '#2C5D7C': 'Свободен' };
+const STATUS_LABELS = { '#DC2626': 'Перегрузка', '#F59E0B': 'Отдых не завершён', '#16A34A': 'Занят', '#2563EB': 'Свободен' };
 
 function plotStatusLabel(plot) {
     const c = plotColor(plot);
@@ -4551,10 +4891,10 @@ function popupNode(plot) {
 
 function renderMap(plots, canvasId) {
     const L = window.L;
-    if (!L) return;
+    if (!L) return null;
     destroyMap();
     const canvas = $(canvasId || 'map');
-    if (!canvas) return;
+    if (!canvas) return null;
     clear(canvas);
     const map = L.map(canvas, {
         scrollWheelZoom: true,
@@ -4584,6 +4924,7 @@ function renderMap(plots, canvasId) {
     const layer = L.layerGroup().addTo(map);
     state.mapLayer = layer;
     const bounds = [];
+    const polygons = new Map();
     let geometries = 0;
     for (const plot of plots) {
         const rings = coordsFromPlot(plot);
@@ -4599,9 +4940,10 @@ function renderMap(plots, canvasId) {
         poly.on('click', () => {
             poly.openPopup();
             try { map.fitBounds(L.latLngBounds(latlngs), { padding: [36, 36] }); } catch { /* ignore */ }
-            poly.setStyle({ color: '#174D1B', fillColor: '#FF8F00', fillOpacity: 0.55, weight: 3 });
+            poly.setStyle({ color: '#166534', fillColor: '#F59E0B', fillOpacity: 0.55, weight: 3 });
             poly.once('popupclose', () => poly.setStyle(style));
         });
+        polygons.set(String(plot.id), { poly });
         for (const pt of latlngs) {
             if (Array.isArray(pt) && pt.length >= 2 && Number.isFinite(pt[0]) && Number.isFinite(pt[1])) bounds.push(pt);
         }
@@ -4610,12 +4952,13 @@ function renderMap(plots, canvasId) {
     renderLegend(geometries > 0);
     if (!geometries) toast(t('map.noGeom'), 'warn');
     setTimeout(() => { try { map.invalidateSize(); } catch { /* ignore */ } }, 80);
+    return { map, polygons };
 }
 
 /* --------------------------------------------------------------------------
  * 12. Canvas-графики (без библиотек)
  * -------------------------------------------------------------------------- */
-const CHART_COLORS = ['#2E7D32', '#FF8F00', '#2C5D7C', '#B3261E', '#6A1B9A', '#00838F'];
+const CHART_COLORS = ['#16A34A', '#F59E0B', '#2563EB', '#DC2626', '#7C3AED', '#0891B2'];
 const LABEL_KEYS = ['period', 'month', 'period_month', 'plot', 'plot_no', 'sku', 'status', 'assignee', 'reason_type', 'name', 'label', 'group_name'];
 
 function seriesToVariants(series, page) {
@@ -4713,14 +5056,14 @@ function drawChart(canvas, variant) {
     canvas.height = Math.round(h * dpr);
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, w, h);
-    ctx.fillStyle = '#FFFDF7';
+    ctx.fillStyle = '#FFFFFF';
     ctx.fillRect(0, 0, w, h);
 
     const labels = variant.labels || [];
     const sets = variant.series || [];
     const all = sets.flatMap((s) => s.values || []);
     if (!labels.length || !all.length) {
-        ctx.fillStyle = '#7C8770';
+        ctx.fillStyle = '#64756A';
         ctx.font = '14px sans-serif';
         ctx.textAlign = 'center';
         ctx.fillText(t('chart.nodata'), w / 2, h / 2);
@@ -4735,9 +5078,9 @@ function drawChart(canvas, variant) {
     const yOf = (v) => pad.t + ph - ((Number(v) - minV) / span) * ph;
 
     /* Сетка и подписи значений. */
-    ctx.strokeStyle = '#E4E0D2';
+    ctx.strokeStyle = '#E8F0E9';
     ctx.lineWidth = 1;
-    ctx.fillStyle = '#7C8770';
+    ctx.fillStyle = '#64756A';
     ctx.font = '11px ui-monospace, monospace';
     ctx.textAlign = 'right';
     for (let i = 0; i <= 4; i++) {
@@ -4745,13 +5088,13 @@ function drawChart(canvas, variant) {
         ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(w - pad.r, y); ctx.stroke();
         ctx.fillText(humanNumber(minV + span * (1 - i / 4)), pad.l - 8, y + 4);
     }
-    ctx.strokeStyle = '#C4BBA1';
+    ctx.strokeStyle = '#C3D4C7';
     ctx.beginPath(); ctx.moveTo(pad.l, pad.t); ctx.lineTo(pad.l, pad.t + ph); ctx.lineTo(w - pad.r, pad.t + ph); ctx.stroke();
 
     /* Подписи категорий (прореживаем, чтобы не накладывались). */
     const step = Math.max(1, Math.ceil(labels.length / Math.max(4, Math.floor(pw / 90))));
     ctx.textAlign = 'center';
-    ctx.fillStyle = '#53604A';
+    ctx.fillStyle = '#4B5F52';
     for (let i = 0; i < labels.length; i += step) {
         const x = pad.l + (variant.type === 'bar' ? (i + 0.5) * pw / labels.length : (labels.length === 1 ? pw / 2 : i * pw / (labels.length - 1)));
         const txt = String(labels[i]);
