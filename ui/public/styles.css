@@ -2977,9 +2977,11 @@ body.compact-tables .data-table tbody td { padding: 6px var(--u-2); }
 /* ---- SVG-иконки, зарисовки, мягкий фон приложения ---- */
 .icon, .nav-icon {
   fill: none; stroke: currentColor;
-  stroke-width: 1.8; stroke-linejoin: round; stroke-linecap: round;
+  stroke-width: 2; stroke-linejoin: round; stroke-linecap: round;
 }
+.icon use { vector-effect: non-scaling-stroke; }
 .icon { display: inline-block; width: 18px; height: 18px; vertical-align: -3px; }
+.icon-sm { width: 16px; height: 16px; }
 .nav-icon { width: 20px; height: 20px; margin-right: 8px; }
 .illustration { width: 36px; height: 24px; display: block; }
 .icon.empty-art { display: block; width: 28px; height: 28px; margin: 0 auto var(--u-3); }

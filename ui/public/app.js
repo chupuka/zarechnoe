@@ -2418,10 +2418,10 @@ function configureFilters(page) {
         bar.appendChild(sel);
         bar.appendChild(nameInput);
         bar.appendChild(el('button', {
-            class: 'btn btn-sm btn-ghost', type: 'button', text: '★ Сохранить',
+            class: 'btn btn-sm btn-ghost', type: 'button',
             title: 'Сохранить текущие фильтры под этим названием',
             on: { click: () => saveCurrentPreset(nameInput) }
-        }));
+        }, [icon('star'), ' Сохранить']));
         bar.appendChild(el('button', {
             class: 'btn btn-sm btn-ghost', type: 'button', text: 'Удалить',
             on: { click: deleteCurrentPreset }
