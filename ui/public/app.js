@@ -2623,7 +2623,11 @@ async function loadPage() {
         state.perfData = result.perf || null;
         state.herdData = result.herd || null;
         $('view').setAttribute('aria-busy', 'false');
-        const render = () => { if (ticket === state.requestId) renderView(page, result); };
+        const render = () => {
+            if (ticket !== state.requestId) return;
+            destroyMap(); /* карта предыдущего вида не должна жить в отсоединённом DOM */
+            renderView(page, result);
+        };
         renderWithTransition(render);
     } catch (err) {
         if (ticket !== state.requestId) return;
@@ -4483,9 +4487,13 @@ async function toggleMap(forceShow) {
     renderMap(await loadPlotsWithGeom(), 'map');
 }
 
+function destroyMap() {
+    if (state.map) { try { state.map.remove(); } catch { /* ignore */ } state.map = null; state.mapLayer = null; }
+}
+
 function hideMap() {
     show($('map-container'), false);
-    if (state.map) { try { state.map.remove(); } catch { /* ignore */ } state.map = null; state.mapLayer = null; }
+    destroyMap();
 }
 
 function plotColor(plot) {
@@ -4544,11 +4552,15 @@ function popupNode(plot) {
 function renderMap(plots, canvasId) {
     const L = window.L;
     if (!L) return;
-    if (state.map) { try { state.map.remove(); } catch { /* ignore */ } state.map = null; }
+    destroyMap();
     const canvas = $(canvasId || 'map');
     if (!canvas) return;
     clear(canvas);
-    const map = L.map(canvas, { scrollWheelZoom: true }).setView([55.7525, 37.610], 14);
+    const map = L.map(canvas, {
+        scrollWheelZoom: true,
+        /* Без zoom/fade-анимации: уход со страницы не дёргает detached-контейнер */
+        zoomAnimation: false, fadeAnimation: false
+    }).setView([55.7525, 37.610], 14);
     state.map = map;
     const tiles = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '&copy; OpenStreetMap contributors', maxZoom: 19
