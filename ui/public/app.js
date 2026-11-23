@@ -1144,6 +1144,7 @@ function showModalError(msg) {
     const box = $('modal-error');
     box.textContent = String(msg || t('err.generic'));
     show(box, true);
+    box.classList.remove('shake'); void box.offsetWidth; box.classList.add('shake');
 }
 
 let modalSubmitHandler = null;
@@ -1921,7 +1922,10 @@ function showLogin(message) {
     show($('app-view'), false);
     show($('login-view'), true);
     const box = $('login-error');
-    if (message) { box.textContent = message; show(box, true); }
+    if (message) {
+        box.textContent = message; show(box, true);
+        box.classList.remove('shake'); void box.offsetWidth; box.classList.add('shake');
+    }
     else { box.textContent = ''; show(box, false); }
     setTimeout(() => $('login').focus(), 40);
 }
@@ -2070,10 +2074,77 @@ function navigate(pageId) {
 }
 
 /* --------------------------------------------------------------------------
+ * Уведомления: GET /admin/notifications, PATCH /admin/notifications/:id/read
+ * -------------------------------------------------------------------------- */
+let notifToken = null;
+let notifItems = [];
+
+function renderNotifications() {
+    const list = $('notif-list');
+    if (!list) return;
+    clear(list);
+    const unread = notifItems.filter((n) => !n.is_read).length;
+    const badge = $('notif-badge');
+    if (badge) { badge.textContent = String(unread); show(badge, unread > 0); }
+    if (!notifItems.length) {
+        list.appendChild(el('p', { class: 'notif-empty', text: 'Новых уведомлений нет' }));
+        return;
+    }
+    for (const n of notifItems) {
+        const item = el('button', {
+            class: 'notif-item' + (n.is_read ? '' : ' unread'), type: 'button',
+            title: 'Отметить прочитанным', on: { click: () => markNotificationRead(n.id) }
+        });
+        item.appendChild(el('i', { class: 'notif-dot' + (n.is_read ? ' read' : ''), 'aria-hidden': 'true' }));
+        const body = el('div');
+        body.appendChild(el('strong', { class: 'notif-type', text: String(n.type || 'Событие') }));
+        body.appendChild(el('span', { class: 'notif-msg', text: String(n.message || '') }));
+        body.appendChild(el('span', { class: 'notif-item-time', text: formatDate(n.created_at) }));
+        item.appendChild(body);
+        list.appendChild(item);
+    }
+}
+
+async function loadNotifications() {
+    try {
+        const r = await api('GET', '/admin/notifications', undefined, { query: { limit: 20 }, silent: true });
+        notifItems = (r && r.data) || [];
+    } catch { notifItems = []; }
+    renderNotifications();
+}
+
+async function markNotificationRead(id) {
+    try {
+        await api('PATCH', '/admin/notifications/' + encodeURIComponent(String(id)) + '/read', {}, { silent: true });
+        const n = notifItems.find((x) => x.id === id);
+        if (n) n.is_read = true;
+        renderNotifications();
+    } catch { /* без права — оставляем как есть */ }
+}
+
+async function readAllNotifications() {
+    const unread = notifItems.filter((n) => !n.is_read);
+    if (!unread.length) return;
+    await Promise.all(unread.map((n) => markNotificationRead(n.id)));
+    loadNotifications();
+}
+
+function toggleNotifications(force) {
+    const panel = $('notif-panel');
+    if (!panel) return;
+    const open = force === undefined ? panel.hidden : force;
+    show(panel, open);
+    const btn = $('notif-btn');
+    if (btn) btn.setAttribute('aria-expanded', String(open));
+    if (open) loadNotifications();
+}
+
+/* --------------------------------------------------------------------------
  * 8. Роутер, фильтры, загрузка данных
  * -------------------------------------------------------------------------- */
 function route() {
     if (!state.token) return;
+    if (state.token !== notifToken) { notifToken = state.token; loadNotifications(); }
     const id = pageIdFromHash();
     if (!id || !PAGES[id]) { navigate(defaultPage()); return; }
     const page = PAGES[id];
@@ -2127,6 +2198,12 @@ function renderChrome(page) {
             text: pair(action.label) + (action.hotkey ? ' [' + action.hotkey + ']' : ''),
             title: action.hotkey || '', on: { click: () => action.run() }
         }));
+    }
+    const fab = $('fab');
+    if (fab) {
+        show(fab, !!state.createAction && page.kind !== 'home');
+        const label = $('fab-label');
+        if (label) label.textContent = state.createAction ? state.createAction.short : t('create');
     }
     updateUserChip();
     renderHotkeyHint();
@@ -3002,7 +3079,7 @@ function isDirector() {
     return String((state.user && state.user.role && state.user.role.code) || '').toUpperCase() === 'DIRECTOR';
 }
 
-function drawDirectorDonut(canvas, rows) {
+function drawDirectorDonut(canvas, rows, animate) {
     const ctx = canvas && canvas.getContext('2d');
     if (!ctx || !rows || !rows.length) return;
     const w = canvas.clientWidth || 240;
@@ -3011,32 +3088,42 @@ function drawDirectorDonut(canvas, rows) {
     canvas.width = Math.round(w * dpr);
     canvas.height = Math.round(h * dpr);
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.clearRect(0, 0, w, h);
     const total = rows.reduce((s, r) => s + (Number(r.count) || 0), 0) || 1;
-    const colors = DIRECTOR_CHART_COLORS;
     const cx = w / 2, cy = h / 2, r = Math.min(w, h) / 2 - 8;
-    let a = -Math.PI / 2;
-    rows.forEach((row, i) => {
-        const step = (Number(row.count) || 0) / total * Math.PI * 2;
-        if (!step) return;
-        ctx.beginPath();
-        ctx.arc(cx, cy, r, a, a + step);
-        ctx.arc(cx, cy, r * 0.64, a + step, a, true);
-        ctx.closePath();
-        ctx.fillStyle = colors[i % colors.length];
-        ctx.fill();
-        a += step;
-    });
-    const style = getComputedStyle(document.body);
-    ctx.textAlign = 'center';
-    ctx.fillStyle = style.color;
-    ctx.font = '700 26px ' + style.fontFamily;
-    ctx.fillText(String(total), cx, cy + 4);
-    ctx.font = '12px ' + style.fontFamily;
-    ctx.fillText(t('total'), cx, cy + 22);
+    const draw = (p) => {
+        ctx.clearRect(0, 0, w, h);
+        let a = -Math.PI / 2;
+        rows.forEach((row, i) => {
+            const step = (Number(row.count) || 0) / total * Math.PI * 2 * p;
+            if (!step) return;
+            ctx.beginPath();
+            ctx.arc(cx, cy, r, a, a + step);
+            ctx.arc(cx, cy, r * 0.64, a + step, a, true);
+            ctx.closePath();
+            ctx.fillStyle = DIRECTOR_CHART_COLORS[i % DIRECTOR_CHART_COLORS.length];
+            ctx.fill();
+            a += step;
+        });
+        const style = getComputedStyle(document.body);
+        ctx.textAlign = 'center';
+        ctx.fillStyle = style.color;
+        ctx.font = '700 26px ' + style.fontFamily;
+        ctx.fillText(String(total), cx, cy + 4);
+        ctx.font = '12px ' + style.fontFamily;
+        ctx.fillText(t('total'), cx, cy + 22);
+    };
+    if (animate && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        const start = performance.now();
+        const tick = (now) => {
+            const p = Math.min(1, (now - start) / 600);
+            draw(1 - Math.pow(1 - p, 3));
+            if (p < 1) requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
+    } else draw(1);
 }
 
-function drawDirectorBars(canvas, rows) {
+function drawDirectorBars(canvas, rows, animate) {
     const ctx = canvas && canvas.getContext('2d');
     if (!ctx || !rows || !rows.length) return;
     const w = canvas.clientWidth || 320;
@@ -3045,25 +3132,48 @@ function drawDirectorBars(canvas, rows) {
     canvas.width = Math.round(w * dpr);
     canvas.height = Math.round(h * dpr);
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.clearRect(0, 0, w, h);
-    const style = getComputedStyle(document.body);
     const max = Math.max(1, ...rows.map((r) => Number(r.active_heads) || 0));
     const pad = 8, rowH = Math.min(28, (h - pad * 2) / rows.length);
-    rows.slice(0, 8).forEach((r, i) => {
-        const y = pad + i * rowH;
-        const value = Number(r.active_heads) || 0;
-        const norm = Number(r.norm_head_per_ha) || 0;
-        const len = Math.max(2, (value / max) * (w - 96));
-        ctx.fillStyle = value > norm && norm > 0 ? '#B3261E' : '#2E7D32';
-        if (ctx.roundRect) { ctx.beginPath(); ctx.roundRect(66, y, len, Math.max(6, rowH - 10), 4); ctx.fill(); }
-        else ctx.fillRect(66, y, len, Math.max(6, rowH - 10));
-        ctx.fillStyle = style.color;
-        ctx.font = '12px ' + style.fontFamily;
-        ctx.textAlign = 'left';
-        ctx.fillText(String(r.plot || '#' + i), 4, y + rowH - 12);
-        ctx.textAlign = 'right';
-        ctx.fillText(String(value), w - 4, y + rowH - 12);
-    });
+    const draw = (p) => {
+        ctx.clearRect(0, 0, w, h);
+        const style = getComputedStyle(document.body);
+        rows.slice(0, 8).forEach((r, i) => {
+            const y = pad + i * rowH;
+            const value = Number(r.active_heads) || 0;
+            const norm = Number(r.norm_head_per_ha) || 0;
+            const len = Math.max(2, (value / max) * (w - 96) * p);
+            ctx.fillStyle = value > norm && norm > 0 ? '#B3261E' : '#2E7D32';
+            if (ctx.roundRect) { ctx.beginPath(); ctx.roundRect(66, y, len, Math.max(6, rowH - 10), 4); ctx.fill(); }
+            else ctx.fillRect(66, y, len, Math.max(6, rowH - 10));
+            ctx.fillStyle = style.color;
+            ctx.font = '12px ' + style.fontFamily;
+            ctx.textAlign = 'left';
+            ctx.fillText(String(r.plot || '#' + i), 4, y + rowH - 12);
+            ctx.textAlign = 'right';
+            ctx.fillText(String(value), w - 4, y + rowH - 12);
+        });
+    };
+    if (animate && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        const start = performance.now();
+        const tick = (now) => {
+            const p = Math.min(1, (now - start) / 650);
+            draw(1 - Math.pow(1 - p, 3));
+            if (p < 1) requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
+    } else draw(1);
+}
+
+/**Плавный счётчик для KPI кабинета директора. */
+function animateCount(node, target) {
+    if (!node || !Number.isFinite(Number(target)) || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const start = performance.now();
+    const tick = (now) => {
+        const p = Math.min(1, (now - start) / 800);
+        node.nodeValue = humanNumber(Math.round(Number(target) * (1 - Math.pow(1 - p, 3))));
+        if (p < 1) requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
 }
 
 async function mountDirectorMap() {
@@ -3078,7 +3188,7 @@ async function loadDirectorCharts() {
         const src = res && res.series && res.series.by_status;
         if (src && $('director-donut')) {
             const rows = src.slice().sort((a, b) => (Number(b.count) || 0) - (Number(a.count) || 0));
-            drawDirectorDonut($('director-donut'), rows);
+            drawDirectorDonut($('director-donut'), rows, true);
             const legend = $('director-donut-legend');
             if (legend) {
                 clear(legend);
@@ -3094,7 +3204,7 @@ async function loadDirectorCharts() {
     try {
         const res = await api('GET', '/reports/pasture-load', undefined, { silent: true });
         if (res && res.series && res.series.bars && $('director-bars')) {
-            drawDirectorBars($('director-bars'), res.series.bars);
+            drawDirectorBars($('director-bars'), res.series.bars, true);
         }
     } catch { /* нет права на отчёт */ }
 }
@@ -3129,6 +3239,9 @@ function renderDirectorHome() {
     const hero = el('section', { class: 'director-hero' });
     hero.appendChild(el('div', { class: 'dh-layer dh-layer--far', dataset: { dhLayer: '26' } }));
     hero.appendChild(el('div', { class: 'dh-layer dh-layer--near', dataset: { dhLayer: '10' } }));
+    const sun = illustration('sun', 'dh-sun');
+    sun.dataset.dhLayer = '16';
+    hero.appendChild(sun);
     const inner = el('div', { class: 'dh-inner' });
     inner.appendChild(el('h2', { class: 'dh-title', text: `${greet}, ${u.full_name || u.login || 'коллега'}` }));
     inner.appendChild(el('p', { class: 'dh-sub', text: `Роль: ${role} · ${new Date().toLocaleDateString('ru-RU', { day: '2-digit', month: 'long', year: 'numeric' })}` }));
@@ -3184,19 +3297,27 @@ function renderDirectorHome() {
     const kpis = el('div', { class: 'stat-strip director-kpis' });
     for (const c of state.statCards) {
         const value = (typeof c.value === 'number') ? humanNumber(c.value) : String(c.value === null || c.value === undefined ? '—' : c.value);
+        const valueNode = el('span', { class: 'stat-value' }, [
+            document.createTextNode(value),
+            c.unit ? el('span', { class: 'stat-unit', text: ' ' + c.unit }) : null
+        ]);
         kpis.appendChild(el('div', {
             class: 'stat-card' + (c.tone ? ' tone-' + c.tone : ''), title: c.hint || c.label
         }, [
             el('span', { class: 'stat-label', text: c.label }),
-            el('span', { class: 'stat-value' }, [document.createTextNode(value), c.unit ? el('span', { class: 'stat-unit', text: ' ' + c.unit }) : null]),
+            valueNode,
             c.hint ? el('span', { class: 'stat-hint', text: c.hint }) : null
         ]));
+        if (typeof c.value === 'number') animateCount(valueNode.firstChild, c.value);
     }
     reports.appendChild(kpis);
     const links = HOME_LINKS.filter(([, , perm]) => hasPerm(perm));
     const grid = el('div', { class: 'quick-grid' });
     for (const [id, label] of links) {
-        grid.appendChild(el('button', { class: 'quick-link', type: 'button', text: label, on: { click: () => navigate(id) } }));
+        const btn = el('button', { class: 'quick-link', type: 'button', on: { click: () => navigate(id) } });
+        btn.appendChild(icon(ICON_FOR_PAGE[id] || 'home', ''));
+        btn.appendChild(document.createTextNode(label));
+        grid.appendChild(btn);
     }
     const box = panel('Быстрый переход');
     box.appendChild(grid);
@@ -4637,6 +4758,7 @@ function handleKey(e) {
     const typing = ['input', 'textarea', 'select'].includes(tag) || target.isContentEditable;
 
     if (e.key === 'Escape') {
+        toggleNotifications(false);
         if (state.modal) closeModal();
         else { closeHelp(); hideMap(); $('sidebar').classList.remove('open'); }
         return;
@@ -4712,6 +4834,16 @@ function bindEvents() {
     $('refresh-btn').addEventListener('click', () => loadPage());
     $('create-btn').addEventListener('click', () => {
         if (state.createAction) state.createAction.run(); else openCreateSmart();
+    });
+    $('fab').addEventListener('click', () => {
+        if (state.createAction) state.createAction.run(); else openCreateSmart();
+    });
+    $('notif-btn').addEventListener('click', (e) => { e.stopPropagation(); toggleNotifications(); });
+    $('notif-refresh').addEventListener('click', () => loadNotifications());
+    $('notif-read-all').addEventListener('click', () => readAllNotifications());
+    document.addEventListener('click', (e) => {
+        const p = $('notif-panel');
+        if (p && !p.hidden && !e.target.closest('#notif-panel') && !e.target.closest('#notif-btn')) toggleNotifications(false);
     });
     $('pager-prev').addEventListener('click', () => { if (state.pageNo > 1) { state.pageNo--; state.offset = (state.pageNo - 1) * state.limit; loadPage(); } });
     $('pager-next').addEventListener('click', () => { state.pageNo++; state.offset = (state.pageNo - 1) * state.limit; loadPage(); });

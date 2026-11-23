@@ -3019,3 +3019,91 @@ body.compact-tables .data-table tbody td { padding: 6px var(--u-2); }
 .icon.empty-art { display: block; width: 28px; height: 28px; margin: 0 auto var(--u-3); }
 .illustration.empty-art { display: block; margin: 0 auto var(--u-3); }
 .home-art { position: absolute; right: 6%; top: 26%; opacity: 0.85; pointer-events: none; }
+
+/* ---- Плавающая кнопка «Новая запись» ---- */
+.fab {
+  position: fixed; right: var(--u-3); bottom: var(--u-3);
+  z-index: 45;
+  display: inline-flex; align-items: center; gap: var(--u-1);
+  min-height: 48px; padding: 0 var(--u-3);
+  border: 1px solid rgba(255, 255, 255, 0.18); border-radius: var(--r-pill);
+  background: var(--green); color: var(--white);
+  box-shadow: 0 8px 24px rgba(27, 94, 32, 0.35);
+  font: inherit; font-weight: 650; cursor: pointer;
+  animation: fab-in var(--dur-slow) var(--ease) both;
+  transition: transform var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease);
+}
+.fab:hover { transform: translateY(-3px); box-shadow: 0 12px 30px rgba(27, 94, 32, 0.45); }
+.fab:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+.fab .icon { width: 20px; height: 20px; }
+body.has-modal .fab { opacity: 0; pointer-events: none; transform: scale(0.9); }
+@keyframes fab-in { from { opacity: 0; transform: translateY(14px) scale(0.9); } }
+@media (max-width: 600px) {
+  .fab { padding: 0; width: 52px; height: 52px; justify-content: center; }
+  .fab span { display: none; }
+  .toasts { bottom: 84px; }
+}
+
+/* ---- Панель уведомлений ---- */
+.notif-wrap { position: relative; display: inline-flex; }
+.notif-btn { position: relative; }
+.notif-badge {
+  position: absolute; top: 0; right: 0;
+  min-width: 16px; height: 16px; padding: 0 4px;
+  display: grid; place-items: center;
+  border-radius: var(--r-pill); background: var(--danger); color: #fff;
+  font-size: 10px; font-weight: 700; line-height: 1;
+}
+.notif-panel {
+  position: absolute; top: calc(100% + 8px); right: 0;
+  width: min(380px, calc(100vw - 32px));
+  max-height: 60vh; overflow-y: auto;
+  background: var(--surface-raised);
+  border: 1px solid var(--line); border-radius: var(--r-lg);
+  box-shadow: var(--shadow-3);
+  z-index: calc(var(--z-header) + 2);
+  animation: notif-in var(--dur) var(--ease) both;
+}
+@keyframes notif-in { from { opacity: 0; transform: translateY(-8px); } }
+.notif-head, .notif-foot {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: var(--u-1) var(--u-2);
+  border-bottom: 1px solid var(--line);
+}
+.notif-foot { border-bottom: 0; border-top: 1px solid var(--line); }
+.notif-list { max-height: 46vh; overflow-y: auto; }
+.notif-item {
+  display: flex; align-items: flex-start; gap: var(--u-1);
+  width: 100%; padding: var(--u-2); text-align: left;
+  border: 0; border-bottom: 1px solid var(--line-faint);
+  background: transparent; color: var(--ink); font: inherit; cursor: pointer;
+}
+.notif-item:hover { background: var(--surface-hover); }
+.notif-item.unread { background: var(--green-wash); }
+.notif-dot {
+  width: 7px; height: 7px; margin-top: 5px; flex: 0 0 7px;
+  border-radius: 50%; background: var(--green);
+}
+.notif-dot.read { background: transparent; }
+.notif-msg { display: block; font-size: var(--fs-sm); }
+.notif-type { display: block; font-size: var(--fs-xs); color: var(--ink-muted); }
+.notif-item-time { display: block; margin-top: 2px; font-size: var(--fs-xs); color: var(--ink-muted); }
+.notif-empty { margin: 0; padding: var(--u-4) var(--u-2); text-align: center; color: var(--ink-muted); font-size: var(--fs-sm); }
+
+/* ---- Встряхивание поля/сообщения при ошибке формы ---- */
+.shake { animation: field-shake 360ms var(--ease) both; }
+@keyframes field-shake {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-5px); }
+  40%, 80% { transform: translateX(5px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .fab, .notif-panel, .shake { animation: none !important; }
+}
+
+/* ---- Кабинет директора: иконки и декорация ---- */
+.quick-link .icon { color: var(--accent); }
+.dh-sun {
+  position: absolute; right: 6%; top: 18%;
+  width: 64px; height: 44px; opacity: 0.65; pointer-events: none;
+}
