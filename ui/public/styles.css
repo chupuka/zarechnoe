@@ -495,26 +495,6 @@ code, kbd, .mono { font-family: var(--font-mono); font-size: 0.9em; }
 }
 .container { width: 100%; max-width: var(--content-max); margin: 0 auto; }
 
-.page-head {
-  display: flex; align-items: flex-end; justify-content: space-between;
-  gap: var(--u-3); flex-wrap: wrap;
-  margin-bottom: var(--u-3);
-  padding-bottom: var(--u-2);
-  border-bottom: 1px solid var(--line);
-}
-.page-head h1 { margin: 0; }
-.page-head .eyebrow {
-  display: block;
-  margin-bottom: var(--u-1);
-  font-size: var(--fs-xs);
-  font-weight: 650;
-  color: var(--link);
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
-}
-.page-head .page-note { color: var(--ink-muted); font-size: var(--fs-sm); }
-.page-head-actions { display: flex; align-items: center; gap: var(--u-1); flex-wrap: wrap; }
-
 .section + .section { margin-top: var(--u-4); }
 .section-head {
   display: flex; align-items: baseline; justify-content: space-between;
@@ -725,54 +705,6 @@ code, kbd, .mono { font-family: var(--font-mono); font-size: 0.9em; }
    8. Формы
    -------------------------------------------------------------------------- */
 .field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-.label {
-  font-size: var(--fs-xs);
-  font-weight: 650;
-  color: var(--ink-soft);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-}
-.label .req { color: var(--danger); margin-left: 2px; }
-
-.input, .select, .textarea {
-  width: 100%;
-  min-height: 36px;
-  padding: var(--u-1) var(--u-2);
-  background: var(--surface-raised);
-  border: 1px solid var(--line-strong);
-  border-radius: var(--r);
-  color: var(--ink);
-  font-size: var(--fs-base);
-  transition: border-color var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease),
-              background var(--dur-fast) var(--ease);
-}
-.textarea { min-height: 88px; resize: vertical; line-height: var(--lh-base); }
-.input::placeholder, .textarea::placeholder { color: var(--placeholder); }
-.input:hover, .select:hover, .textarea:hover { border-color: var(--link); }
-.input:focus, .select:focus, .textarea:focus {
-  outline: none;
-  border-color: var(--link);
-  box-shadow: 0 0 0 3px var(--green-soft);
-}
-.input:disabled, .select:disabled, .textarea:disabled {
-  background: var(--surface-sunken);
-  color: var(--ink-muted);
-  cursor: not-allowed;
-}
-.input[aria-invalid="true"], .select[aria-invalid="true"], .textarea[aria-invalid="true"] {
-  border-color: var(--danger);
-  box-shadow: 0 0 0 3px var(--danger-soft);
-}
-.select {
-  appearance: none;
-  padding-right: var(--u-4);
-  background-image: linear-gradient(45deg, transparent 50%, currentColor 50%),
-                    linear-gradient(135deg, currentColor 50%, transparent 50%);
-  background-position: calc(100% - 16px) 15px, calc(100% - 11px) 15px;
-  background-size: 5px 5px, 5px 5px;
-  background-repeat: no-repeat;
-}
-
 .field-hint { font-size: var(--fs-xs); color: var(--ink-muted); }
 .field-error { font-size: var(--fs-xs); color: var(--danger); font-weight: 600; }
 
@@ -790,13 +722,13 @@ code, kbd, .mono { font-family: var(--font-mono); font-size: 0.9em; }
   border-top: 1px solid var(--line);
 }
 
-.checkbox, .radio {
+.checkbox {
   display: inline-flex; align-items: center; gap: var(--u-1);
   font-size: var(--fs-sm);
   color: var(--ink-soft);
   cursor: pointer;
 }
-.checkbox input, .radio input {
+.checkbox input {
   flex: 0 0 auto;
   width: 16px; height: 16px;
   accent-color: var(--link);
@@ -811,16 +743,9 @@ code, kbd, .mono { font-family: var(--font-mono); font-size: 0.9em; }
   border-left: 3px solid var(--accent);
   border-radius: var(--r);
 }
-.override-reason .label { color: var(--ink); }
 .override-reason .field-hint { color: var(--ink-soft); }
 
 /* Экран входа */
-.login-wrap {
-  min-height: 100vh;
-  display: grid;
-  place-items: center;
-  padding: var(--u-3);
-}
 .login-card {
   width: min(100%, 400px);
   padding: var(--u-4);
@@ -944,7 +869,6 @@ code, kbd, .mono { font-family: var(--font-mono); font-size: 0.9em; }
   opacity: 0.85;
 }
 .badge.no-dot::before { display: none; }
-.badge-pill { border-radius: var(--r-pill); padding: 2px 10px; }
 
 /* ЗДОРОВ / НА_ЛЕЧЕНИИ / ПАДЁЖ */
 .badge-healthy, .badge[data-status="ЗДОРОВ"], .badge[data-status="HEALTHY"] {
@@ -1270,7 +1194,6 @@ body.has-modal { overflow: hidden; }
 .page-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 .page-ellipsis { padding: 0 4px; color: var(--ink-muted); }
 .page-size { display: inline-flex; align-items: center; gap: var(--u-1); color: var(--ink-muted); }
-.page-size .select { width: auto; min-height: 32px; padding: 4px var(--u-4) 4px var(--u-1); }
 
 /* --------------------------------------------------------------------------
    16. Справка / hotkeys
@@ -1430,9 +1353,9 @@ kbd {
   h1 { font-size: var(--fs-xl); }
   h2 { font-size: var(--fs-lg); }
 
-  .page-head, .content-head { gap: var(--u-1); margin-bottom: var(--u-2); }
-  .page-head-actions, .page-actions { width: 100%; }
-  .page-head-actions .btn, .page-actions .btn { flex: 1 1 auto; }
+  .content-head { gap: var(--u-1); margin-bottom: var(--u-2); }
+  .page-actions { width: 100%; }
+  .page-actions .btn { flex: 1 1 auto; }
 
   /* KPI — две компактные колонки */
   .kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--u-1); }
@@ -1558,7 +1481,7 @@ kbd {
    -------------------------------------------------------------------------- */
 @media print {
   .app-header, .sidebar, .drawer-backdrop, .filters, .pagination,
-  .toasts, .overlay, .page-head-actions, .btn, .help-hint { display: none !important; }
+  .toasts, .overlay, .btn, .help-hint { display: none !important; }
   body { background: #fff; color: #000; }
   .main { margin: 0; padding: 0; }
   .panel, .kpi-card, .record-card, .map-card, .chart-card { box-shadow: none; border-color: #999; }
@@ -1589,7 +1512,7 @@ kbd {
    -------------------------------------------------------------------------- */
 @media (prefers-contrast: more) {
   :root { --line: #8A8778; --line-strong: #55523F; --ink-muted: #4C5340; }
-  .btn, .input, .select, .textarea, .badge, .panel, .kpi-card { border-width: 2px; }
+  .btn, .badge, .panel, .kpi-card { border-width: 2px; }
   .nav-link.active { outline: 2px solid var(--link); }
 }
 
@@ -1719,8 +1642,8 @@ html, body { font-family: var(--font); background-color: var(--bg); color: var(-
 }
 
 /* --- Поля формы (реальные классы) --------------------------------------- */
-.field-label, .label { font-size: var(--fs-xs); font-weight: 650; color: var(--ink-soft); }
-.field-input, .input, .select, .textarea {
+.field-label { font-size: var(--fs-xs); font-weight: 650; color: var(--ink-soft); }
+.field-input {
   width: 100%;
   min-height: 36px;
   padding: var(--u-1) var(--u-2);
@@ -2664,7 +2587,7 @@ body { font-size: var(--fs-base); line-height: 1.55; }
 .nav-group-title { font-size: var(--fs-sm); }
 .nav-note { font-size: var(--fs-xs); font-family: var(--font); }
 .nav-note code, .demo-list code { color: var(--link-hover); }
-.field-label, .label, .stat-label { font-size: var(--fs-sm); }
+.field-label, .stat-label { font-size: var(--fs-sm); }
 
 /* --- Плашки: ровная сетка вместо «рваного» flex-переноса ----------------- */
 .stat-strip {
