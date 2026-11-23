@@ -251,7 +251,7 @@ code, kbd, .mono { font-family: var(--font-mono); font-size: 0.9em; }
   position: sticky;
   top: 0;
   z-index: var(--z-header);
-  height: var(--header-h);
+  height: calc(var(--header-h) - var(--header-shrink-amt) * var(--header-shrink));
   display: flex;
   align-items: center;
   gap: var(--u-3);
@@ -259,6 +259,8 @@ code, kbd, .mono { font-family: var(--font-mono); font-size: 0.9em; }
   background: var(--surface-raised);
   border-bottom: 1px solid var(--line);
   box-shadow: var(--shadow-1);
+  transition: height var(--dur) var(--ease), background var(--dur) var(--ease),
+              box-shadow var(--dur) var(--ease), backdrop-filter var(--dur) var(--ease);
 }
 
 /* Тонкая «полевая» полоса под шапкой */
@@ -270,6 +272,13 @@ code, kbd, .mono { font-family: var(--font-mono); font-size: 0.9em; }
   background: linear-gradient(90deg, var(--green) 0 22%, transparent 22% 100%);
   opacity: 0.55;
   pointer-events: none;
+}
+
+/* При прокрутке шапка «исчезает»: тень, блюр и лёгкая прозрачность */
+.app-header.scrolled {
+  background: color-mix(in srgb, var(--surface-raised) 92%, transparent);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12);
+  backdrop-filter: blur(10px);
 }
 
 .brand { display: flex; align-items: center; gap: var(--u-2); min-width: 0; }
@@ -359,7 +368,7 @@ code, kbd, .mono { font-family: var(--font-mono); font-size: 0.9em; }
 /* Боковое меню — фиксированное */
 .sidebar {
   position: fixed;
-  top: var(--header-h);
+  top: calc(var(--header-h) - var(--header-shrink-amt) * var(--header-shrink));
   left: 0;
   bottom: 0;
   z-index: 30;
@@ -443,7 +452,7 @@ code, kbd, .mono { font-family: var(--font-mono); font-size: 0.9em; }
 /* Контент (.content — фактический класс в index.html, .main — алиас) */
 .main, .content {
   margin-left: var(--sidebar-w);
-  min-height: calc(100vh - var(--header-h));
+  min-height: calc(100vh - var(--header-h) + var(--header-shrink-amt) * var(--header-shrink));
   padding: var(--u-4) var(--u-4) var(--u-10);
   transition: margin-left var(--dur) var(--ease);
   min-width: 0;
@@ -1553,7 +1562,11 @@ kbd {
 html, body { font-family: var(--font); background-color: var(--bg); color: var(--ink); }
 [hidden] { display: none !important; }
 
-.app-shell { min-height: 100vh; }
+.app-shell {
+  min-height: 100vh;
+  --header-shrink: 0;                       /* 0–1: усыхание шапки при прокрутке (JS) */
+  --header-shrink-amt: calc(var(--header-h) * 0.22);
+}
 
 /* --- Экран входа -------------------------------------------------------- */
 .login-view {

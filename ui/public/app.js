@@ -1813,6 +1813,21 @@ function applyTheme() {
     if (state.chartCurrent) drawChart($('chart-canvas'), state.chartCurrent);
 }
 
+/* Шапка — усыхает при прокрутке: высота, тень, блюр. Переменная считается от .app-shell. */
+function setupHeaderMotion() {
+    const shell = document.querySelector('.app-shell');
+    const header = document.querySelector('.app-header');
+    if (!shell || !header) return;
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const onScroll = () => {
+        const shrink = Math.min(1, Math.max(0, (window.scrollY - 16) / 80));
+        shell.style.setProperty('--header-shrink', shrink.toFixed(3));
+        header.classList.toggle('scrolled', shrink > 0);
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    onScroll();
+}
+
 function applyLang() {
     document.documentElement.lang = state.lang;
     try { localStorage.setItem(LANG_KEY, state.lang); } catch { /* ignore */ }
@@ -4660,6 +4675,7 @@ async function bootstrap() {
     try { state.overrideReason = sessionStorage.getItem(OVERRIDE_KEY) || ''; } catch { /* ignore */ }
     bindEvents();
     applyTheme();
+    setupHeaderMotion();
     applyLang();
     applyUiPrefs();
     renderMenu();
