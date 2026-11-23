@@ -11,6 +11,8 @@
    1. Токены: палитра, сетка 8px, радиусы, типографика
    -------------------------------------------------------------------------- */
 :root {
+  color-scheme: light;
+
   /* Примитивы: тональная шкала. НЕ переопределяются темами. */
   --green-50: #F0F6EE;
   --green-100: #E4EFE2;
@@ -143,6 +145,8 @@
    2. Тёмная тема — переопределение переменных
    -------------------------------------------------------------------------- */
 [data-theme="dark"] {
+  color-scheme: dark;
+
   /* Нейтральный тёмный с лёгким зелёным подтоном; elevation — осветлением */
   --bg: #141614;
   --surface: #1A1D18;
@@ -284,7 +288,7 @@ code, kbd, .mono { font-family: var(--font-mono); font-size: 0.9em; }
   position: sticky;
   top: 0;
   z-index: var(--z-header);
-  height: calc(var(--header-h) - var(--header-shrink-amt) * var(--header-shrink));
+  height: calc(var(--header-h) - var(--header-shrink-amt, 0px) * var(--header-shrink, 0));
   display: flex;
   align-items: center;
   gap: var(--u-3);
@@ -400,7 +404,7 @@ code, kbd, .mono { font-family: var(--font-mono); font-size: 0.9em; }
 /* Боковое меню — фиксированное */
 .sidebar {
   position: fixed;
-  top: calc(var(--header-h) - var(--header-shrink-amt) * var(--header-shrink));
+  top: calc(var(--header-h) - var(--header-shrink-amt, 0px) * var(--header-shrink, 0));
   left: 0;
   bottom: 0;
   z-index: 30;
@@ -484,7 +488,7 @@ code, kbd, .mono { font-family: var(--font-mono); font-size: 0.9em; }
 /* Контент (.content — фактический класс в index.html, .main — алиас) */
 .main, .content {
   margin-left: var(--sidebar-w);
-  min-height: calc(100vh - var(--header-h) + var(--header-shrink-amt) * var(--header-shrink));
+  min-height: calc(100vh - var(--header-h) + var(--header-shrink-amt, 0px) * var(--header-shrink, 0));
   padding: var(--u-4) var(--u-4) var(--u-10);
   transition: margin-left var(--dur) var(--ease);
   min-width: 0;

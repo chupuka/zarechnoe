@@ -1833,11 +1833,15 @@ function closeHelp() { const d = $('help-dialog'); if (d && d.open) d.close(); }
  * 7. Тема, язык, авторизация, меню
  * -------------------------------------------------------------------------- */
 function applyTheme() {
-    document.body.dataset.theme = state.theme;
+    const dark = state.theme === 'dark';
+    document.documentElement.dataset.theme = state.theme;
+    document.documentElement.style.colorScheme = state.theme;
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.setAttribute('content', dark ? '#141614' : '#2E7D32');
     const cb = $('theme-toggle');
-    if (cb) cb.checked = state.theme === 'dark';
-    $('theme-label').textContent = state.theme === 'dark' ? t('theme.dark') : t('theme.light');
-    try { localStorage.setItem(THEME_KEY, state.theme); } catch { /* ignore */ }
+    if (cb) cb.checked = dark;
+    $('theme-label').textContent = dark ? t('theme.dark') : t('theme.light');
+    /* Запись в localStorage — только по действию пользователя, не при загрузке. */
     if (state.chartCurrent) drawChart($('chart-canvas'), state.chartCurrent);
 }
 
@@ -4853,7 +4857,20 @@ function bindEvents() {
     $('theme-toggle').addEventListener('change', () => {
         state.theme = $('theme-toggle').checked ? 'dark' : 'light';
         applyTheme();
+        try { localStorage.setItem(THEME_KEY, state.theme); } catch { /* ignore */ }
     });
+
+    /* Системная тема продолжает работать, пока пользователь не выбрал вручную. */
+    const systemTheme = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)');
+    if (systemTheme && systemTheme.addEventListener) {
+        systemTheme.addEventListener('change', (e) => {
+            let chosen = null;
+            try { chosen = localStorage.getItem(THEME_KEY); } catch { /* ignore */ }
+            if (chosen === 'dark' || chosen === 'light') return;
+            state.theme = e.matches ? 'dark' : 'light';
+            applyTheme();
+        });
+    }
 
     /* Переключатель языка RU/EN (в index.html его нет — создаём здесь). */
     const langBtn = el('button', { class: 'btn btn-ghost', id: 'lang-toggle', type: 'button', title: t('lang.switch') });
@@ -4957,7 +4974,12 @@ function bindEvents() {
  * 15. Bootstrap
  * -------------------------------------------------------------------------- */
 async function bootstrap() {
-    try { state.theme = localStorage.getItem(THEME_KEY) === 'dark' ? 'dark' : 'light'; } catch { /* ignore */ }
+    /* Инлайн-скрипт в <head> уже учёл сохранённый выбор и системную тему. */
+    const bootTheme = document.documentElement.dataset.theme;
+    state.theme = bootTheme === 'dark' || bootTheme === 'light'
+        ? bootTheme
+        : (function () { try { return localStorage.getItem(THEME_KEY) === 'dark' ? 'dark' : 'light'; }
+                         catch { return 'light'; } })();
     try { state.lang = localStorage.getItem(LANG_KEY) === 'en' ? 'en' : 'ru'; } catch { /* ignore */ }
     try { state.overrideReason = sessionStorage.getItem(OVERRIDE_KEY) || ''; } catch { /* ignore */ }
     bindEvents();
