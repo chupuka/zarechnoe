@@ -4550,9 +4550,24 @@ function renderMap(plots, canvasId) {
     clear(canvas);
     const map = L.map(canvas, { scrollWheelZoom: true }).setView([55.7525, 37.610], 14);
     state.map = map;
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    const tiles = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '&copy; OpenStreetMap contributors', maxZoom: 19
     }).addTo(map);
+
+    /* Если тайлы недоступны — оставляем контуры из API и показываем плашку. */
+    let tileNotice = canvas.parentElement && canvas.parentElement.querySelector('.map-tile-error');
+    if (!tileNotice) {
+        tileNotice = el('p', { class: 'map-tile-error', role: 'status',
+            text: 'Тайлы карты недоступны · показаны контуры участков' });
+        canvas.parentElement.appendChild(tileNotice);
+    }
+    tileNotice.hidden = true;
+    let tileWarned = false;
+    tiles.on('tileerror', () => {
+        if (tileWarned) return;
+        tileWarned = true;
+        tileNotice.hidden = false;
+    });
 
     const layer = L.layerGroup().addTo(map);
     state.mapLayer = layer;

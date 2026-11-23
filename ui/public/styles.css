@@ -931,6 +931,14 @@ code, kbd, .mono { font-family: var(--font-mono); font-size: 0.9em; }
   border-bottom: 1px solid var(--line);
 }
 .map-head h3 { font-size: var(--fs-md); }
+.map-tile-error {
+  margin: 0;
+  padding: var(--u-1) var(--u-2);
+  background: var(--accent-soft);
+  color: var(--accent-fg);
+  border-top: 1px solid var(--accent);
+  font-size: var(--fs-sm);
+}
 .map-legend { display: flex; flex-wrap: wrap; gap: var(--u-2); font-size: var(--fs-xs); color: var(--ink-soft); }
 .map-legend span { display: inline-flex; align-items: center; gap: 6px; }
 .map-legend i { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }

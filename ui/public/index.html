@@ -31,11 +31,9 @@
         html[data-theme="dark"], html[data-theme="dark"] body { background: #141614; color: #EDEFEA; }
     </style>
 
-    <!-- Leaflet 1.9.4 (CSS + JS) для карты OSM -->
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-          integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-            integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin="" defer></script>
+    <!-- Leaflet 1.9.4 вендорирован локально (BSD-2-Clause, vendor/leaflet/LICENSE) -->
+    <link rel="stylesheet" href="./vendor/leaflet/leaflet.css">
+    <script src="./vendor/leaflet/leaflet.js" defer></script>
 
     <link rel="stylesheet" href="./styles.css">
     <script src="./deploy-config.js"></script>
@@ -345,6 +343,7 @@
                     <button id="map-close" class="icon-btn" type="button" aria-label="Закрыть карту"><svg class="icon" aria-hidden="true"><use href="#icon-x"/></svg></button>
                 </header>
                 <div id="map" class="map-canvas" role="application" aria-label="Интерактивная карта Leaflet"></div>
+                <p id="map-tile-error" class="map-tile-error" role="status" hidden>Тайлы карты недоступны · показаны контуры участков</p>
                 <p class="map-legend">OSM · Leaflet 1.9.4 · участки /api/v1/pasture-plots</p>
             </section>
 
