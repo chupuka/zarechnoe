@@ -436,6 +436,14 @@ function el(tag, props, children) {
     return node;
 }
 
+/** Текстовый дубль статуса: цвет — не единственный канал информации. */
+function statusFlag(kind) {
+    const alert = kind === 'alert';
+    const text = alert ? (state.lang === 'en' ? 'Alert' : 'Тревога')
+                       : (state.lang === 'en' ? 'Attention' : 'Внимание');
+    return el('span', { class: 'tone-flag' + (alert ? ' tone-flag-alert' : ''), text });
+}
+
 function clear(node) { if (node) while (node.firstChild) node.removeChild(node.firstChild); }
 
 /** Иконка из спрайта в index.html: <svg class="icon"><use href="#icon-x"/></svg> */
@@ -2225,6 +2233,7 @@ function route() {
 function renderChrome(page) {
     const pair = (v) => Array.isArray(v) ? (state.lang === 'en' ? v[1] : v[0]) : String(v || '');
     $('page-eyebrow').textContent = pair(page.eyebrow);
+    $('page-crumb-current').textContent = pair(page.title);
     $('page-title').textContent = pair(page.title);
     state.createAction = currentCreateAction(page);
     const createBtn = $('create-btn');
@@ -2497,7 +2506,8 @@ function renderStatStrip(data, series) {
                 document.createTextNode(value),
                 c.unit ? el('span', { class: 'stat-unit', text: ' ' + c.unit }) : null
             ]),
-            c.hint ? el('span', { class: 'stat-hint', text: c.hint }) : null
+            c.hint ? el('span', { class: 'stat-hint', text: c.hint }) : null,
+            c.tone && c.tone !== 'ok' ? statusFlag(c.tone === 'bad' ? 'alert' : 'warn') : null
         ]);
         const vals = (series && Array.isArray(series[c.key])) ? series[c.key] : null;
         if (vals && vals.length) {
@@ -2882,7 +2892,8 @@ function renderKpi(rows, keys) {
         grid.appendChild(el('div', { class: 'kpi-card' + (warn ? ' is-warn' : '') }, [
             el('div', { class: 'kpi-label', text: labelOf(k) }),
             el('div', { class: 'kpi-value', text: typeof v === 'number' ? humanNumber(v) : (v === null || v === undefined ? '—' : String(v)) }),
-            el('div', { class: 'kpi-foot', text: k })
+            el('div', { class: 'kpi-foot', text: k }),
+            warn ? statusFlag('warn') : null
         ]));
     }
     $('view').appendChild(grid);
@@ -3009,7 +3020,8 @@ function renderDbaMonitor(h) {
     for (const [label, val] of kpis) {
         grid.appendChild(el('div', { class: 'kpi-card' + (label === pair('Состояние', 'Status') && severityClass ? ' ' + severityClass : '') }, [
             el('span', { class: 'kpi-label', text: label }),
-            el('span', { class: 'kpi-value', text: String(val == null ? '—' : val) })
+            el('span', { class: 'kpi-value', text: String(val == null ? '—' : val) }),
+            severityClass ? statusFlag(severityClass.indexOf('alert') >= 0 ? 'alert' : 'warn') : null
         ]));
     }
     holder.appendChild(grid);
@@ -3353,7 +3365,8 @@ function renderDirectorHome() {
         }, [
             el('span', { class: 'stat-label', text: c.label }),
             valueNode,
-            c.hint ? el('span', { class: 'stat-hint', text: c.hint }) : null
+            c.hint ? el('span', { class: 'stat-hint', text: c.hint }) : null,
+            c.tone && c.tone !== 'ok' ? statusFlag(c.tone === 'bad' ? 'alert' : 'warn') : null
         ]));
         if (typeof c.value === 'number') animateCount(valueNode.firstChild, c.value);
     }
@@ -3700,7 +3713,8 @@ function renderPerf(p) {
             el('span', { class: 'stat-value' }, [
                 document.createTextNode(typeof value === 'number' ? humanNumber(value) : String(value == null ? '—' : value)),
                 unit ? el('span', { class: 'stat-unit', text: ' ' + unit }) : null
-            ])
+            ]),
+            warn ? statusFlag('warn') : null
         ]));
     }
     holder.appendChild(grid);
@@ -3821,7 +3835,8 @@ function renderGrazing(page, result) {
         ]) {
             strip.appendChild(el('div', { class: 'stat-card' + (label === 'Без закрепления' && Number((herd.unassigned || []).length) ? ' tone-warn' : '') }, [
                 el('span', { class: 'stat-label', text: label }),
-                el('span', { class: 'stat-value' }, [document.createTextNode(String(value)), el('span', { class: 'stat-unit', text: ' ' + unit })])
+                el('span', { class: 'stat-value' }, [document.createTextNode(String(value)), el('span', { class: 'stat-unit', text: ' ' + unit })]),
+                label === 'Без закрепления' && Number((herd.unassigned || []).length) ? statusFlag('warn') : null
             ]));
         }
         holder.appendChild(strip);

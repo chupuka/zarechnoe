@@ -47,6 +47,7 @@
   --on-danger: var(--white);
   --accent-fg: #8A4B00;
   --placeholder: var(--ink-muted);
+  --warn-strip: #B26A00;
 
   /* Производные поверхности и текст */
   --bg: var(--sand-100);
@@ -170,6 +171,7 @@
   --on-danger: #10160E;
   --accent-fg: var(--amber-500);
   --placeholder: var(--ink-muted);
+  --warn-strip: #FFB74D;
 
   --green-soft: #1E3A20;
   --green-wash: #1A2C1A;
@@ -426,7 +428,7 @@ code, kbd, .mono { font-family: var(--font-mono); font-size: 0.9em; }
   font-weight: 650;
   color: var(--ink-muted);
   text-transform: uppercase;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.08em;
 }
 .nav-group + .nav-group { margin-top: var(--u-2); }
 
@@ -594,17 +596,28 @@ code, kbd, .mono { font-family: var(--font-mono); font-size: 0.9em; }
   box-shadow: var(--shadow-1);
   overflow: hidden;
 }
-/* Левая «корешковая» полоса — отсылка к бумажной ведомости */
+/* Полоса слева — только статус, не декор: warn/alert. */
 .kpi-card::before {
   content: "";
   position: absolute;
   left: 0; top: 0; bottom: 0;
   width: 3px;
-  background: var(--green);
-  opacity: 0.75;
+  background: transparent;
 }
-.kpi-card.is-warn::before { background: var(--accent); }
+.kpi-card.is-warn::before { background: var(--warn-strip); }
 .kpi-card.is-alert::before { background: var(--danger); }
+.tone-flag {
+  align-self: flex-start;
+  margin-left: auto;
+  padding: 1px 8px;
+  border-radius: var(--r-pill);
+  background: var(--accent-soft);
+  color: var(--accent-fg);
+  font-size: var(--fs-xs);
+  font-weight: 650;
+  white-space: nowrap;
+}
+.tone-flag-alert { background: var(--danger-soft); color: var(--danger); }
 
 .kpi-label {
   font-size: var(--fs-xs);
@@ -1028,7 +1041,7 @@ body.has-modal { overflow: hidden; }
   font-size: var(--fs-xs);
   color: var(--link);
   text-transform: uppercase;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.08em;
   margin-bottom: 2px;
 }
 .modal-body { padding: var(--u-3); overflow-y: auto; flex: 1 1 auto; }
@@ -1600,7 +1613,7 @@ html, body { font-family: var(--font); background-color: var(--bg); color: var(-
   font-size: var(--fs-xs);
   font-weight: 650;
   text-transform: uppercase;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.08em;
   color: var(--ink-soft);
 }
 .login-demo-hint { margin-bottom: var(--u-2); }
@@ -1721,7 +1734,7 @@ html, body { font-family: var(--font); background-color: var(--bg); color: var(-
   font-weight: 650;
   color: var(--ink-muted);
   text-transform: uppercase;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.08em;
 }
 .nav-list { display: grid; gap: 2px; }
 .nav-list .nav-link {
@@ -1809,14 +1822,16 @@ html, body { font-family: var(--font); background-color: var(--bg); color: var(-
   padding-bottom: var(--u-2);
   border-bottom: 1px solid var(--line);
 }
-.page-eyebrow {
+/* Хлебные крошки: группа — обычный текст, текущая страница — aria-current. */
+.breadcrumbs {
+  display: flex; align-items: center; gap: var(--u-1);
   margin: 0 0 var(--u-1);
   font-size: var(--fs-xs);
-  font-weight: 650;
-  color: var(--link);
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
+  color: var(--ink-muted);
 }
+.breadcrumb-group { color: var(--ink-muted); }
+.breadcrumb-sep { color: var(--line-strong); }
+.breadcrumb-current { color: var(--ink-soft); font-weight: 650; }
 .page-title { font-size: var(--fs-2xl); letter-spacing: -0.025em; }
 .page-actions { display: flex; align-items: center; gap: var(--u-1); flex-wrap: wrap; }
 .view { min-width: 0; }
@@ -2037,7 +2052,7 @@ body.has-modal { overflow: hidden; }
   border-bottom: 1px solid var(--line);
   font-size: var(--fs-xs);
   text-transform: uppercase;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.08em;
   color: var(--ink-muted);
 }
 .help-body h3:first-child { margin-top: 0; }
@@ -2236,7 +2251,7 @@ body.has-modal { overflow: hidden; }
 }
 .stat-card.tone-ok { border-left-color: var(--link); }
 .stat-card.tone-ok .stat-value { color: var(--link); }
-.stat-card.tone-warn { border-left-color: var(--accent); background: var(--accent-soft); }
+.stat-card.tone-warn { border-left-color: var(--warn-strip); background: var(--accent-soft); }
 .stat-card.tone-warn .stat-value { color: var(--status-treatment); }
 .stat-card.tone-bad { border-left-color: var(--danger); background: var(--danger-soft); }
 .stat-card.tone-bad .stat-value { color: var(--danger); }
