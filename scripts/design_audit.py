@@ -110,8 +110,8 @@ PAIRS = [
     ("ink-soft / surface",    "--ink-soft",   "--surface",         4.5),
     ("ink-muted / surface",   "--ink-muted",  "--surface",         4.5),
     ("ink-muted / hover",     "--ink-muted",  "--surface-hover",   4.5),
-    ("link(green) / surface", "--green",      "--surface",         4.5),
-    ("link-hover(dark)/surf", "--dark",       "--surface",         4.5),
+    ("link / surface",        "--link",       "--surface",         4.5),
+    ("link-hover / surface",  "--link-hover", "--surface",         4.5),
     ("accent / surface",      "--accent",     "--surface",         4.5),
     ("on-primary (white/green)", "--white",   "--green",           4.5),
     ("input border / surface","--line-strong","--surface",         3.0),
@@ -119,6 +119,10 @@ PAIRS = [
     ("healthy / healthy-bg",  "--status-healthy",   "--status-healthy-bg",   4.5),
     ("treatment / treatment-bg", "--status-treatment", "--status-treatment-bg", 4.5),
     ("dead / dead-bg",        "--status-dead",      "--status-dead-bg",      4.5),
+    ("on-danger / danger",    "--on-danger",        "--danger",              4.5),
+    ("on-primary / green-700","--on-primary",       "--green-700",           4.5),
+    ("nav-active / green-soft","--nav-active-fg",   "--green-soft",          4.5),
+    ("link-hover / green-soft","--link-hover",      "--green-soft",          4.5),
 ]
 for theme, variables in (("LIGHT", light_vars), ("DARK", dark_vars)):
     print(f"\n  [{theme}]")
