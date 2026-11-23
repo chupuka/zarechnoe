@@ -60,7 +60,7 @@
 | `--ink-muted` | **`#5F6953`** | **`#A7B0A2`** | ≥4.5:1 на surface и hover (5.68/4.81; 7.6/6.69) |
 | `--placeholder` | `#5F6953` (без opacity) | `#A7B0A2` | ≥4.5:1 |
 | `--line` | `#DCD5C2` | `#35402F` | волосяная декоративная линия |
-| `--line-strong` (граница инпута) | **`#8A8872`** | **`#6B7663`** | ≥3:1 (3.53 / 3.57) |
+| `--line-strong` (граница инпута) | **`#7C7A64`** | **`#71806B`** | ≥3:1 на всех поверхностях (мин 3.53 / 3.44) |
 | `--link` | `#2E7D32` | `#66BB6A` | ≥4.5:1 (5.04 / 7.2) |
 | `--link-hover` | `#1B5E20` | **`#8BC98E`** | ≥4.5:1 (7.74 / 8.8) |
 | `--nav-active-fg` | `#1B5E20` | **`#A5D6A7`** | ≥4.5:1 на `--green-soft` темы |
@@ -140,7 +140,7 @@
 | 3 | Хак `color:#10160E` | `styles.css:525-526` | B2: костыль вместо `--on-primary` | удалить |
 | 4 | `--ink-muted #7C8770` и placeholder opacity .85 | `styles.css:30,715,1690` | B3: 3.06–3.72:1 / 2.97:1 | `#5F6953`, убрать opacity |
 | 5 | Статус «на лечении» `#E07B00` | `styles.css:49` | B3: 2.67:1 | `#9A5400` на том же фоне |
-| 6 | Границы инпутов | `styles.css:33,129` | B3/B4: 1.88 / 1.86:1 | `#8A8872` / `#6B7663` |
+| 6 | Границы инпутов | `styles.css:61,157` | B3/B4: 1.88 / 1.86:1 | `#7C7A64` / `#71806B` (проверено на 4 поверхностях) |
 | 7 | `calc()` без fallback | `styles.css:254,370,454` | B5 | `var(--header-shrink, 0)` |
 | 8 | Нет anti-FOUC / color-scheme / theme-color | `index.html:7,13-27` | B5 | инлайн-скрипт, meta |
 | 9 | Мёртвая система `.input/.label` | `styles.css:693-730` | B6: в HTML/JS нет использований | удалить, оставить `.field-*` |
@@ -220,17 +220,28 @@
 
 Каждый коммит — атомарный, проверен в браузере до push, откат через `git revert`. Ветка `design/systematize`, в `main` не мержим без решения владельца.
 
-### 11.3 Контраст «после» (целевые значения, проверяются в Фазе 1)
+### 11.3 Контраст «после» (замерено после B2–B4, `py scripts/design_audit.py`)
 
-| Пара | Было (L/D) | Стало (L/D) | Ожидаемый вердикт |
+| Пара | Было (L/D) | Стало (L/D) | Вердикт |
 |---|---|---|---|
+| `ink / bg` | 13.44 / 15.55 | 13.44 / 15.71 | OK |
+| `ink-soft / surface` | 6.58 / 8.74 | 6.58 / 10.04 | OK |
 | `ink-muted / surface` | 3.72 / 5.19 | 5.68 / 7.60 | OK |
-| `ink-muted / hover` | 3.15 / 4.18 | 4.81 / 6.69 | OK |
+| `ink-muted / hover` | 3.15 / 4.18 | 4.81 / 6.45 | OK |
+| `link / surface` | 5.04 / 3.11 | 5.04 / 7.20 | OK |
 | `link-hover / surface` | 7.74 / 3.11 | 7.74 / 8.80 | OK |
-| input border / surface | 1.88 / 2.07 | 3.53 / 3.57 | OK |
-| healthy / healthy-bg | 4.33 / 6.21 | 5.01 / 6.21 | OK |
+| `placeholder / surface` | 2.97 / — | 5.68 / 7.60 | OK |
+| `accent-fg / surface` | 2.25 / — | 6.69 / 7.45 | OK |
+| `on-primary / green-700` | 5.13 / 6.05 | 5.13 / 5.13 | OK |
+| `on-danger / danger` | 6.54 / 5.99* | 6.54 / 7.69 | OK |
+| input border / surface | 1.88 / 2.07 | 4.28 / 4.06 | OK |
+| input border / sunken | — | 3.53 / 4.48 | OK |
+| input border / hover | — | 3.62 / 3.44 | OK |
+| healthy / healthy-bg | 4.33 / 6.21 | 6.65 / 6.21 | OK |
 | treatment / treatment-bg | 2.67 / 8.00 | 5.13 / 8.00 | OK |
-| nav-active / green-soft | 2.44 (dark) | ≥4.5 / ≥4.5 | OK |
+| nav-active / green-soft | 6.65 / 2.44 | 6.65 / 7.60 | OK |
+
+\* тёмный on-danger «до» держался на ремапе `--white`; после заморозки стал бы 2.39:1 — введён `--on-danger #10160E`.
 
 ### 11.4 QA-матрица (заполняется в Фазе 6)
 
@@ -253,3 +264,4 @@
 | B1 `design: fix broken close-button icons` | Добавлены 4 недостающих `>` перед `<svg>` в `index.html:331,391,415,440` | Иконки 18×18 рендерятся; закрытие карты/модалки/справки/палитры работает |
 | B2 `design: freeze primitives and map semantics` | Тональная шкала примитивов; `--link`, `--link-hover`, `--nav-active-fg`, `--on-primary`, `--on-danger`; удалены ремапы примитивов и хак `#10160E`; grep: 68 использований в CSS, 0 в `app.js` | `py scripts/design_audit.py`: примитивы не переопределяются; link 5.04/6.75, link-hover 7.74/8.24, nav-active 6.65/7.60, on-danger 6.54/7.69. Браузер: светлая `#2E7D32`/`#1B5E20`, тёмная `#66BB6A`/`#A5D6A7`, danger-текст `#10160E`. В консоли — старый view-transition error (исправим в Фазе 5) |
 | B3 `design: light theme contrast` | `--ink-muted #5F6953`; placeholder без `opacity`; healthy `#1B5E20` (6.65:1); «на лечении» `#9A5400` (5.13:1); граница `#7C7A64`; `--accent-fg #8A4B00` для текста/иконок вместо декоративного `--accent`; убраны дубли `--ink-muted` в позднем блоке «Читаемость» | `py scripts/design_audit.py` — светлая тема: все текстовые пары ≥4.5, граница 4.28 на surface / 3.53 на sunken; браузер: `muted #5F6953`, placeholder `#5F6953`, border `#7C7A64`, healthy `#1B5E20`, treatment `#9A5400` |
+| B4 `design: dark theme surfaces and contrast` | Рампа `#141614 → #1A1D18 → #20241E → #262B24` (elevation осветлением), `--ink #EDEFEA`, `--ink-soft #C2C9BC`, `--ink-muted #A7B0A2`, граница `#71806B`; затемнение OSM-тайлов `invert+hue-rotate+brightness`, попапы и атрибуция через токены | `py scripts/design_audit.py` — все пары OK: ink/bg 15.71, muted/hover 6.45, border на surface/raised/sunken/hover 4.06/3.75/4.48/3.44; статусы 6.21/8.00/6.41. Браузер: тёмная карта с читаемыми контурами, шапка `#20241E` |

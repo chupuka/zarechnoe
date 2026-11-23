@@ -143,18 +143,19 @@
    2. Тёмная тема — переопределение переменных
    -------------------------------------------------------------------------- */
 [data-theme="dark"] {
-  --bg: #141A12;
-  --surface: #1C241A;
-  --surface-raised: #232D20;
-  --surface-sunken: #10160E;
-  --surface-hover: #2A3526;
+  /* Нейтральный тёмный с лёгким зелёным подтоном; elevation — осветлением */
+  --bg: #141614;
+  --surface: #1A1D18;
+  --surface-raised: #20241E;
+  --surface-sunken: #101210;
+  --surface-hover: #262B24;
 
-  --ink: #EDF2E6;
-  --ink-soft: #B7C4AC;
-  --ink-muted: #899879;
+  --ink: #EDEFEA;
+  --ink-soft: #C2C9BC;
+  --ink-muted: #A7B0A2;
 
   --line: #35402F;
-  --line-strong: #4A5741;
+  --line-strong: #71806B;
   --line-faint: rgba(237, 242, 230, 0.07);
 
   /* Примитивы выше не трогаем: тема маппит только семантику на тона. */
@@ -998,11 +999,20 @@ code, kbd, .mono { font-family: var(--font-mono); font-size: 0.9em; }
   background: var(--surface-sunken);
   z-index: 0;
 }
-.leaflet-container { font-family: var(--font); }
+.leaflet-container { font-family: var(--font); background: var(--surface-sunken); }
 .leaflet-popup-content-wrapper { border-radius: var(--r); box-shadow: var(--shadow-2); }
 .leaflet-popup-content { font-size: var(--fs-sm); line-height: var(--lh-base); }
 .leaflet-bar a { color: var(--ink); }
-[data-theme="dark"] .leaflet-tile-pane { filter: brightness(0.78) saturate(0.8); }
+/* Тёмная тема: затемняем только тайлы, не оверлеи и атрибуцию */
+[data-theme="dark"] .leaflet-tile-pane {
+  filter: invert(1) hue-rotate(180deg) brightness(0.92) contrast(0.9) saturate(0.75);
+}
+[data-theme="dark"] .leaflet-popup-content-wrapper,
+[data-theme="dark"] .leaflet-popup-tip { background: var(--surface-raised); color: var(--ink); }
+[data-theme="dark"] .leaflet-control-attribution {
+  background: rgba(20, 22, 20, 0.82); color: var(--ink-soft);
+}
+[data-theme="dark"] .leaflet-control-attribution a { color: var(--link); }
 
 /* Графики:series из /reports/* */
 .chart-grid {

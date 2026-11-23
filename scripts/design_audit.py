@@ -135,6 +135,15 @@ for theme, variables in (("LIGHT", light_vars), ("DARK", dark_vars)):
         mark = "OK " if ratio >= need else "FAIL"
         print(f"    {mark} {label:<28} {ratio:5.2f}:1  (нужно {need})")
 
+section("2b. ГРАНИЦА ИНПУТА И MUTED НА ВСЕХ ПОВЕРХНОСТЯХ (нетекст 3.0 / текст 4.5)")
+for theme, variables in (("LIGHT", light_vars), ("DARK", dark_vars)):
+    print(f"\n  [{theme}]")
+    for surf in ("--surface", "--surface-raised", "--surface-sunken", "--surface-hover"):
+        b = contrast("--line-strong", surf, variables)
+        m = contrast("--ink-muted", surf, variables)
+        print(f"    border / {surf:<18} {b:5.2f}:1  {'OK' if b >= 3 else 'FAIL'}"
+              f"   muted {m:5.2f}:1  {'OK' if m >= 4.5 else 'FAIL'}")
+
 section("3. ТОКЕНЫ: определены, но не используются / используются, но не определены")
 used = set(re.findall(r"var\(\s*(--[\w-]+)", CSS))
 defined = set(root) | set(dark) | set(re.findall(r"(--[\w-]+)\s*:", CSS))
