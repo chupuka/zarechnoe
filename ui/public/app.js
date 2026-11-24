@@ -3372,7 +3372,10 @@ async function loadDirectorWorkspace() {
     if (mapMeta) mapMeta.textContent = state.lang === 'en'
         ? `${plots.length} plots · OSM`
         : `${plots.length} ${directorPlural(plots.length, 'участок', 'участка', 'участков')} · OSM`;
-    if (mapReady) directorMapController = renderMap(plots, 'director-map') || null;
+    if (mapReady) {
+        directorMapController = renderMap(applyMapEdits(plots), 'director-map') || null;
+        setupDirectorMapEditor(plots);
+    }
 
     const herdRows = herdRes && herdRes.series && herdRes.series.by_status;
     if (herdRows && $('director-donut')) {
@@ -3661,12 +3664,18 @@ function renderDirectorHome() {
     const mapCard = el('section', { class: 'director-card director-map-card' });
     mapCard.appendChild(el('header', { class: 'dc-head' }, [
         el('h2', { text: directorText('Пастбища хозяйства', 'Farm pastures') }),
-        el('span', { id: 'director-map-meta', class: 'dc-hint', text: 'OpenStreetMap' })
+        el('span', { id: 'director-map-meta', class: 'dc-hint', text: 'OpenStreetMap' }),
+        el('button', {
+            id: 'director-map-edit', class: 'btn-ghost btn-sm dm-edit-toggle', type: 'button',
+            on: { click: () => toggleDirectorMapEdit() }
+        })
     ]));
+    mapCard.appendChild(el('div', { id: 'director-map-tools', class: 'dm-tools', hidden: true }));
     const mapCanvas = el('div', { id: 'director-map', class: 'director-map' });
     mapCanvas.setAttribute('role', 'region');
     mapCanvas.setAttribute('aria-label', directorText('Карта пастбищ', 'Pasture map'));
     mapCard.appendChild(mapCanvas);
+    mapCard.appendChild(el('div', { id: 'director-map-form', class: 'dm-form', hidden: true }));
     const legend = el('div', { class: 'dc-legend' });
     for (const [color, labelRu, labelEn] of [
         ['#16A34A', 'Занят', 'In use'], ['#F59E0B', 'Отдых не завершён', 'Rest incomplete'],
@@ -4842,6 +4851,8 @@ function parseWkt(wkt) {
 
 function coordsFromPlot(plot) {
     if (!plot) return [];
+    /* Сохранённая правка директора перекрывает контур из API. */
+    if (Array.isArray(plot._editCoords) && plot._editCoords.length >= 3) return [plot._editCoords];
     const raw = plot.geom_wkt || plot.wkt || plot.geom || plot.geometry;
     if (typeof raw === 'string') return parseWkt(raw);
     if (Array.isArray(raw) && raw.length) {
@@ -5004,6 +5015,7 @@ function renderMap(plots, canvasId) {
         const style = { color, weight: 2, fillColor: color, fillOpacity: 0.28 };
         const latlngs = rings[0]; // первый внешний контур
         const poly = L.polygon(latlngs, style).addTo(layer);
+        poly._plotId = String(plot.id); // связь с участком для редактора директора
         poly.bindPopup(popupNode(plot));
         poly.on('mouseover', () => poly.setStyle({ weight: 3, fillOpacity: 0.45 }));
         poly.on('mouseout', () => poly.setStyle(style));
@@ -5023,6 +5035,460 @@ function renderMap(plots, canvasId) {
     if (!geometries) toast(t('map.noGeom'), 'warn');
     setTimeout(() => { try { map.invalidateSize(); } catch { /* ignore */ } }, 80);
     return { map, polygons };
+}
+
+/* --------------------------------------------------------------------------
+ * 11b. Редактор карты директора
+ * --------------------------------------------------------------------------
+ * Контуры участков приходят из /pasture-plots. Правки контуров и новые
+ * фигуры (многоугольник, прямоугольник, круг, метка) хранятся в localStorage:
+ * сервер, БД и VPS не затрагиваются — это демо-функциональность кабинета.
+ * -------------------------------------------------------------------------- */
+const MAP_EDIT_KEY = 'zarechnoe.mapEdits';
+const DM_SHAPE_LABELS = [
+    ['pasture', 'Пастбище', 'Pasture'], ['plot', 'Участок', 'Plot'],
+    ['water', 'Водопой', 'Water point'], ['shelter', 'Укрытие', 'Shelter'],
+    ['other', 'Другое', 'Other']
+];
+
+function mapEditsLoad() {
+    const raw = loadStore(MAP_EDIT_KEY, null);
+    const e = raw && typeof raw === 'object' ? raw : {};
+    if (!e.plots || typeof e.plots !== 'object' || Array.isArray(e.plots)) e.plots = {};
+    if (!Array.isArray(e.extras)) e.extras = [];
+    return e;
+}
+function mapEditsSave(e) { saveStore(MAP_EDIT_KEY, e); }
+function mapEditsClear() { try { localStorage.removeItem(MAP_EDIT_KEY); } catch { /* ignore */ } }
+
+/** Накладываем сохранённые контуры на данные API перед отрисовкой. */
+function applyMapEdits(plots) {
+    const e = mapEditsLoad();
+    let overrides = 0;
+    const out = (plots || []).map((p) => {
+        const ov = e.plots[String(p.id)];
+        if (ov && Array.isArray(ov.latlngs) && ov.latlngs.length >= 3) {
+            overrides++;
+            return Object.assign({}, p, { geom_wkt: null, _editCoords: ov.latlngs });
+        }
+        return p;
+    });
+    out._editCount = overrides + e.extras.length;
+    return out;
+}
+
+let directorMapEditor = null;
+
+function dmStyle(props) {
+    const color = /^#[0-9a-f]{6}$/i.test(String((props || {}).color || '')) ? props.color : '#7C3AED';
+    return { color, weight: 2, fillColor: color, fillOpacity: 0.25 };
+}
+
+/** Цвет метки подставляется в divIcon только после проверки формата #RRGGBB. */
+function dmPinIcon(color) {
+    const L = window.L;
+    const c = /^#[0-9a-f]{6}$/i.test(String(color || '')) ? color : '#DC2626';
+    return L.divIcon({
+        className: 'dm-pin-wrap',
+        html: '<span class="dm-pin" style="background:' + c + '"></span>',
+        iconSize: [22, 22], iconAnchor: [11, 22]
+    });
+}
+
+function dmReadLatlngs(layer) {
+    if (!layer) return [];
+    if (typeof layer.getLatLngs === 'function') {
+        let arr = layer.getLatLngs();
+        if (Array.isArray(arr) && arr.length && Array.isArray(arr[0])) arr = arr[0];
+        if (Array.isArray(arr)) {
+            return arr.map((p) => [Number(p.lat), Number(p.lng)])
+                .filter((p) => Number.isFinite(p[0]) && Number.isFinite(p[1]));
+        }
+    }
+    if (typeof layer.getLatLng === 'function') {
+        const c = layer.getLatLng();
+        if (c) return [[Number(c.lat), Number(c.lng)]];
+    }
+    return [];
+}
+
+function dmWriteLatlngs(layer, pts) {
+    if (!layer || !Array.isArray(pts) || !pts.length) return;
+    if (typeof layer.setLatLngs === 'function') {
+        const nested = typeof layer.getLatLngs === 'function'
+            && Array.isArray(layer.getLatLngs()) && Array.isArray(layer.getLatLngs()[0]);
+        layer.setLatLngs(nested ? [pts] : pts);
+    } else if (typeof layer.setLatLng === 'function') {
+        layer.setLatLng([pts[0][0], pts[0][1]]);
+    }
+}
+
+function dmStop(ev) {
+    try {
+        const L = window.L;
+        if (L && L.DomEvent) L.DomEvent.stopPropagation((ev && ev.originalEvent) || ev);
+    } catch { /* ignore */ }
+}
+
+/** Перетаскивание фигуры мышью: во время dragging карта не двигается. */
+function dmBindDrag(layer, onCommit) {
+    if (!layer || typeof layer.on !== 'function') return;
+    layer.on('mousedown', (ev) => {
+        const ed = directorMapEditor;
+        if (!ed || !ed.active || ed.tool) return;
+        if (ev.originalEvent && ev.originalEvent.button !== 0) return;
+        dmStop(ev);
+        const map = ed.map;
+        try { map.dragging.disable(); } catch { /* ignore */ }
+        const start = ev.latlng;
+        const orig = dmReadLatlngs(layer);
+        let moved = false;
+        const move = (e) => {
+            if (!e || !e.latlng || !orig.length) return;
+            const dLat = e.latlng.lat - start.lat;
+            const dLng = e.latlng.lng - start.lng;
+            if (Math.abs(dLat) + Math.abs(dLng) > 0.00001) moved = true;
+            dmWriteLatlngs(layer, orig.map((p) => [p[0] + dLat, p[1] + dLng]));
+        };
+        const up = () => {
+            try { map.off('mousemove', move); map.off('mouseup', up); map.dragging.enable(); } catch { /* ignore */ }
+            const now = dmReadLatlngs(layer);
+            if (moved) { if (typeof onCommit === 'function') onCommit(now); }
+            else dmOpenForm(layer);
+        };
+        map.on('mousemove', move);
+        map.on('mouseup', up);
+    });
+}
+
+function dmBounds(pts) {
+    const a = pts[0], b = pts[pts.length - 1];
+    return [
+        [Math.min(a[0], b[0]), Math.min(a[1], b[1])],
+        [Math.max(a[0], b[0]), Math.max(a[1], b[1])]
+    ];
+}
+
+/** Одна сохранённая фигура на карте. */
+function dmRenderExtra(ed, rec) {
+    const L = window.L;
+    if (!L || !ed || !ed.layer) return null;
+    const props = rec.props || (rec.props = {});
+    let layer = null;
+    if (rec.kind === 'polygon') layer = L.polygon(rec.latlngs, dmStyle(props));
+    else if (rec.kind === 'rect') layer = L.rectangle(dmBounds(rec.latlngs), dmStyle(props));
+    else if (rec.kind === 'circle') {
+        layer = L.circle(rec.center, Object.assign({}, dmStyle(props), { radius: Number(rec.radius) || 200 }));
+    } else if (rec.kind === 'marker') layer = L.marker(rec.center, { icon: dmPinIcon(props.color) });
+    if (!layer) return null;
+    layer._dmRecord = rec;
+    layer.addTo(ed.layer);
+    const title = props.name || directorText('Новый объект', 'New object');
+    layer._dmPopup = el('strong', { text: title + ' · ' + (labelOf(props.kind) || props.kind || '') });
+    layer.bindPopup(layer._dmPopup);
+    dmBindDrag(layer, (pts) => {
+        if (rec.kind === 'circle' || rec.kind === 'marker') rec.center = pts[0];
+        else rec.latlngs = pts;
+        mapEditsSave(ed.edits);
+    });
+    return layer;
+}
+
+function dmRenderExtras(ed) {
+    for (const rec of ed.edits.extras) dmRenderExtra(ed, rec);
+}
+
+function dmNewRecord(ed, kind, pts) {
+    const rec = {
+        id: 'x' + Date.now().toString(36) + Math.floor(Math.random() * 10000).toString(36),
+        kind, latlngs: pts,
+        props: {
+            name: directorText('Новый объект', 'New object'),
+            kind: 'pasture', area: '', note: '', color: '#7C3AED'
+        }
+    };
+    if (kind === 'circle') {
+        rec.center = pts[0];
+        rec.radius = Math.max(20, Math.round(ed.map.distance(pts[0], pts[1])));
+    }
+    if (kind === 'marker') rec.center = pts[0];
+    ed.edits.extras.push(rec);
+    mapEditsSave(ed.edits);
+    const layer = dmRenderExtra(ed, rec);
+    if (layer && ed.active) dmOpenForm(layer);
+    toast(directorText('Фигура добавлена', 'Shape added'), 'ok');
+    return rec;
+}
+
+function dmPreview(ed, hover) {
+    const L = window.L;
+    if (!L || !ed || !ed.map) return;
+    if (ed.preview) { try { ed.map.removeLayer(ed.preview); } catch { /* ignore */ } ed.preview = null; }
+    const pts = ed.points.slice();
+    if (hover && pts.length) pts.push([hover.lat, hover.lng]);
+    if (pts.length >= 2) {
+        ed.preview = L.polyline(pts, { color: '#7C3AED', weight: 2, dashArray: '6 5' }).addTo(ed.map);
+    }
+}
+
+function dmFinishTool(ed) {
+    if (!ed) return;
+    ed.tool = null;
+    ed.points = [];
+    if (ed.preview) { try { ed.map.removeLayer(ed.preview); } catch { /* ignore */ } ed.preview = null; }
+    const container = ed.map && ed.map.getContainer ? ed.map.getContainer() : null;
+    if (container) container.style.cursor = '';
+    for (const b of document.querySelectorAll('#director-map-tools .dm-tool')) {
+        b.classList.toggle('is-on', false);
+    }
+    const hint = $('director-map-hint');
+    if (hint) hint.textContent = directorText(
+        'Выберите инструмент — фигуру можно тянуть мышью и редактировать.',
+        'Pick a tool — any shape can be dragged and edited.');
+}
+
+function dmSelectTool(ed, kind) {
+    if (!ed) return;
+    if (!ed.active) toggleDirectorMapEdit(true);
+    ed.tool = ed.tool === kind ? null : kind;
+    ed.points = [];
+    dmPreview(ed);
+    const container = ed.map && ed.map.getContainer ? ed.map.getContainer() : null;
+    if (container) container.style.cursor = ed.tool && ed.tool !== 'move' ? 'crosshair' : '';
+    for (const b of document.querySelectorAll('#director-map-tools .dm-tool')) {
+        b.classList.toggle('is-on', b.dataset.tool === ed.tool);
+    }
+    const hints = {
+        move: directorText('Тяните объект мышью. Клик по объекту открывает карточку.', 'Drag any shape. Click a shape to edit it.'),
+        polygon: directorText('Клики ставят вершины. Двойной клик или клик по первой точке завершает. Esc — отмена.', 'Click to add vertices. Double-click or click the first point to finish. Esc cancels.'),
+        rect: directorText('Клик по первому углу, затем по противоположному.', 'Click one corner, then the opposite one.'),
+        circle: directorText('Клик — центр, второй клик задаёт радиус.', 'Click the centre, then click to set the radius.'),
+        marker: directorText('Клик — поставить метку хозяйства.', 'Click to drop a farm marker.')
+    };
+    const hint = $('director-map-hint');
+    if (hint) hint.textContent = hints[ed.tool] || '';
+}
+
+function dmMapClick(ed, ev) {
+    if (!ed || !ed.active || !ed.tool || ed.tool === 'move' || !ev || !ev.latlng) return;
+    dmStop(ev);
+    const ll = ev.latlng;
+    const point = [Number(ll.lat), Number(ll.lng)];
+    if (ed.tool === 'marker') {
+        dmNewRecord(ed, 'marker', [point]);
+        dmFinishTool(ed);
+        return;
+    }
+    if (ed.tool === 'polygon') {
+        /* Клик рядом с первой вершиной замыкает многоугольник. */
+        if (ed.points.length >= 3 && ed.map && typeof ed.map.latLngToContainerPoint === 'function') {
+            const first = ed.map.latLngToContainerPoint(ed.points[0]);
+            const now = ed.map.latLngToContainerPoint(point);
+            if (Math.hypot(first.x - now.x, first.y - now.y) < 12) {
+                dmNewRecord(ed, 'polygon', ed.points.slice());
+                dmFinishTool(ed);
+                return;
+            }
+        }
+        ed.points.push(point);
+        dmPreview(ed);
+        return;
+    }
+    if (ed.tool === 'rect' || ed.tool === 'circle') {
+        if (!ed.points.length) { ed.points.push(point); dmPreview(ed); return; }
+        const a = ed.points[0];
+        if (ed.tool === 'rect') dmNewRecord(ed, 'rect', [a, point]);
+        else dmNewRecord(ed, 'circle', [a, point]);
+        dmFinishTool(ed);
+    }
+}
+
+function dmMapDblClick(ed, ev) {
+    if (!ed || !ed.active || ed.tool !== 'polygon') return;
+    dmStop(ev);
+    if (ed.points.length >= 3) {
+        dmNewRecord(ed, 'polygon', ed.points.slice());
+        dmFinishTool(ed);
+    }
+}
+
+/** Карточка свойств фигуры: название, тип, площадь, заметка, цвет. */
+function dmOpenForm(layer) {
+    const ed = directorMapEditor;
+    const rec = layer && layer._dmRecord;
+    const box = $('director-map-form');
+    if (!ed || !rec || !box) return;
+    if (rec._formLayer && rec._formLayer !== layer) rec._formLayer.closePopup();
+    rec._formLayer = layer;
+    const props = rec.props || (rec.props = {});
+    clear(box);
+    box.hidden = false;
+
+    const name = el('input', { class: 'field-input', type: 'text', value: props.name || '', placeholder: directorText('Название', 'Name') });
+    const type = el('select', { class: 'field-input' });
+    for (const [v, ru, en] of DM_SHAPE_LABELS) type.appendChild(el('option', { value: v, text: directorText(ru, en) }));
+    type.value = props.kind || 'pasture';
+    const area = el('input', { class: 'field-input', type: 'number', min: '0', step: '0.01', value: props.area === undefined || props.area === null ? '' : String(props.area) });
+    const note = el('textarea', { class: 'field-input', rows: 2, value: props.note || '' });
+    const color = el('input', { class: 'field-input dm-color', type: 'color', value: /^#[0-9a-f]{6}$/i.test(props.color || '') ? props.color : '#7C3AED' });
+
+    box.appendChild(el('strong', { class: 'dm-form-title', text: directorText('Свойства объекта', 'Object properties') }));
+    box.appendChild(el('label', {}, [document.createTextNode(directorText('Название', 'Name')), name]));
+    box.appendChild(el('label', {}, [document.createTextNode(directorText('Тип', 'Type')), type]));
+    box.appendChild(el('label', {}, [document.createTextNode(directorText('Площадь, га', 'Area, ha')), area]));
+    box.appendChild(el('label', {}, [document.createTextNode(directorText('Заметка', 'Note')), note]));
+    box.appendChild(el('label', { class: 'dm-color-field' }, [document.createTextNode(directorText('Цвет', 'Colour')), color]));
+    const label = el('strong', { class: 'dm-form-state', text: rec.plotId
+        ? directorText('Контур участка из API', 'Plot contour from API')
+        : directorText('Новая фигура', 'New shape') });
+    const save = el('button', { class: 'btn-secondary btn-sm', type: 'button',
+        text: directorText('Применить', 'Apply'),
+        on: { click: () => {
+            props.name = name.value.trim() || directorText('Объект', 'Object');
+            props.kind = type.value;
+            props.area = area.value;
+            props.note = note.value.trim();
+            props.color = color.value;
+            if (!rec.plotId && layer.setStyle) layer.setStyle(dmStyle(props));
+            if (rec.kind === 'marker' && layer.setIcon) layer.setIcon(dmPinIcon(props.color));
+            if (layer._dmPopup) layer._dmPopup.textContent = props.name;
+            mapEditsSave(ed.edits);
+            toast(directorText('Свойства сохранены', 'Properties saved'), 'ok');
+            box.hidden = true;
+        } } });
+    const remove = el('button', { class: 'btn-ghost btn-sm', type: 'button',
+        text: rec.plotId ? directorText('Вернуть исходный контур', 'Restore original contour')
+                         : directorText('Удалить фигуру', 'Delete shape'),
+        on: { click: () => {
+            if (rec.plotId) delete ed.edits.plots[rec.plotId];
+            else {
+                const i = ed.edits.extras.indexOf(rec);
+                if (i >= 0) ed.edits.extras.splice(i, 1);
+                try { ed.map.removeLayer(layer); } catch { /* ignore */ }
+            }
+            mapEditsSave(ed.edits);
+            box.hidden = true;
+            toast(directorText('Изменение отменено', 'Change reverted'), 'ok');
+            redrawDirectorMap();
+        } } });
+    box.appendChild(el('div', { class: 'dm-form-actions' }, [label, save, remove]));
+}
+
+function dmSyncUI(ed) {
+    const btn = $('director-map-edit');
+    if (btn) btn.textContent = ed && ed.active
+        ? directorText('✓ Готово', '✓ Done')
+        : directorText('✎ Править карту', '✎ Edit map');
+    show($('director-map-tools'), !!(ed && ed.active));
+    if (!(ed && ed.active)) show($('director-map-form'), false);
+    const hint = $('director-map-hint');
+    if (hint && ed && ed.active && !ed.tool) {
+        hint.textContent = directorText(
+            'Выберите инструмент — фигуру можно тянуть мышью и редактировать.',
+            'Pick a tool — any shape can be dragged and edited.');
+    }
+}
+
+function toggleDirectorMapEdit(force) {
+    const ed = directorMapEditor;
+    if (!ed) return;
+    ed.active = force === undefined ? !ed.active : !!force;
+    if (!ed.active) dmFinishTool(ed);
+    try { if (ed.map) ed.map.doubleClickZoom[ed.active ? 'disable' : 'enable'](); } catch { /* ignore */ }
+    dmSyncUI(ed);
+}
+
+/** Пересобрать карту из исходных контуров + сохранённых правок. */
+function redrawDirectorMap() {
+    const ed = directorMapEditor;
+    if (!ed) return;
+    const plots = applyMapEdits(ed.basePlots);
+    directorMapController = renderMap(plots, 'director-map') || null;
+    setupDirectorMapEditor(ed.basePlots);
+}
+
+async function resetDirectorMapEdits() {
+    mapEditsClear();
+    const ed = directorMapEditor;
+    if (!ed) return;
+    const plots = applyMapEdits(ed.basePlots);
+    directorMapController = renderMap(plots, 'director-map') || null;
+    setupDirectorMapEditor(ed.basePlots);
+    toast(directorText('Все правки карты сброшены', 'All map edits reset'), 'ok');
+}
+
+/** Подключает редактор к уже отрисованной карте кабинета. */
+function setupDirectorMapEditor(basePlots) {
+    if (directorMapEditor) {
+        const old = directorMapEditor;
+        if (old.keyHandler) document.removeEventListener('keydown', old.keyHandler);
+        directorMapEditor = null;
+    }
+    const controller = directorMapController;
+    if (!controller || !controller.map || !$('director-map')) return null;
+    const map = controller.map;
+    const edits = mapEditsLoad();
+    const ed = {
+        active: false, tool: null, points: [], preview: null,
+        map, layer: state.mapLayer, basePlots: basePlots || [], edits,
+        keyHandler: (ev) => {
+            if (ev.key === 'Escape' && directorMapEditor === ed && ed.active && ed.tool) dmFinishTool(ed);
+        }
+    };
+    directorMapEditor = ed;
+
+    /* Существующие контуры участков тоже можно двигать. */
+    for (const [id, item] of controller.polygons) {
+        const plot = (basePlots || []).find((p) => String(p.id) === String(id)) || {};
+        const rec = {
+            plotId: String(id), kind: 'plot', latlngs: dmReadLatlngs(item.poly),
+            props: {
+                name: plot.plot_no || plot.name || ('#' + id),
+                kind: 'pasture',
+                area: plot.area_ha === undefined || plot.area_ha === null ? '' : String(plot.area_ha),
+                note: '', color: '#2563EB'
+            }
+        };
+        item.poly._dmRecord = rec;
+        /* Цвет участка задаёт нагрузка — перекрашиваем только новые фигуры. */
+        dmBindDrag(item.poly, (pts) => {
+            rec.latlngs = pts;
+            ed.edits.plots[String(id)] = { latlngs: pts };
+            mapEditsSave(ed.edits);
+        });
+    }
+    dmRenderExtras(ed);
+
+    map.on('click', (ev) => dmMapClick(ed, ev));
+    map.on('dblclick', (ev) => dmMapDblClick(ed, ev));
+    map.on('mousemove', (ev) => { if (ed.active && ed.points.length) dmPreview(ed, ev.latlng); });
+    document.addEventListener('keydown', ed.keyHandler);
+
+    const tools = $('director-map-tools');
+    if (tools) {
+        clear(tools);
+        tools.appendChild(el('span', { id: 'director-map-hint', class: 'dm-hint' }));
+        for (const [kind, ru, en] of [
+            ['move', '↔ Двигать', '↔ Move'],
+            ['polygon', '⬡ Многоугольник', '⬡ Polygon'],
+            ['rect', '▭ Прямоугольник', '▭ Rectangle'],
+            ['circle', '◯ Круг', '◯ Circle'],
+            ['marker', '● Метка', '● Marker']
+        ]) {
+            tools.appendChild(el('button', {
+                class: 'dm-tool', type: 'button', dataset: { tool: kind },
+                text: directorText(ru, en),
+                on: { click: () => dmSelectTool(ed, kind === 'move' ? 'move' : kind) }
+            }));
+        }
+        tools.appendChild(el('button', {
+            class: 'dm-tool dm-tool-danger', type: 'button',
+            text: directorText('Сбросить правки', 'Reset edits'),
+            on: { click: resetDirectorMapEdits }
+        }));
+    }
+    dmSyncUI(ed);
+    return ed;
 }
 
 /* --------------------------------------------------------------------------
