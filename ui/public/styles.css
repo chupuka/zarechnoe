@@ -3314,3 +3314,67 @@ body.has-modal .fab { opacity: 0; pointer-events: none; transform: scale(0.9); }
 .sys-label { color: var(--ink-soft); }
 .sys-value { margin-left: auto; font-variant-numeric: tabular-nums; }
 .sys-time { font-size: var(--fs-xs); color: var(--ink-muted); }
+
+/* ---- Ролевые карточки главной (ветврач / бригадир) ---- */
+.focus-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: var(--u-1);
+  padding: var(--u-2);
+}
+.focus-card {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 2px var(--u-2);
+  padding: var(--u-2);
+  border: 1px solid var(--line);
+  border-left-width: 1px;
+  border-radius: var(--r);
+  background: var(--surface);
+}
+.focus-icon { grid-row: span 2; color: var(--green); }
+.focus-icon .icon { width: 20px; height: 20px; }
+.focus-label { font-size: var(--fs-xs); color: var(--ink-muted); }
+.focus-value { font-size: var(--fs-xl); font-variant-numeric: tabular-nums; }
+.focus-card.warn { border-left-color: var(--accent); background: var(--accent-soft); }
+
+/* ---- Редактор карты директора: фигуры, перетаскивание, карточка свойств ---- */
+.dm-edit-toggle { flex: 0 0 auto; }
+.dm-tools {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+  padding: var(--u-1) var(--u-2);
+  background: var(--surface-sunken);
+  border-bottom: 1px solid var(--line);
+}
+.dm-hint { flex: 1 1 220px; font-size: var(--fs-xs); color: var(--ink-muted); }
+.dm-tool {
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--surface-raised);
+  color: var(--ink);
+  padding: 4px 9px;
+  font-size: var(--fs-xs);
+  font-family: var(--font);
+  cursor: pointer;
+}
+.dm-tool:hover { border-color: var(--green); background: var(--surface-hover); }
+.dm-tool.is-on { background: var(--green); color: #fff; border-color: var(--green); }
+.dm-tool-danger { color: var(--danger); }
+.dm-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: var(--u-1) var(--u-2);
+  padding: var(--u-2);
+  background: var(--surface-sunken);
+  border-bottom: 1px solid var(--line);
+}
+.dm-form-title { grid-column: 1 / -1; font-size: var(--fs-md); }
+.dm-form label { display: grid; gap: 3px; font-size: var(--fs-xs); color: var(--ink-muted); }
+.dm-form .field-input { width: 100%; }
+.dm-color-field { max-width: 130px; }
+.dm-color { height: 32px; padding: 2px; }
+.dm-form-actions { grid-column: 1 / -1; display: flex; align-items: center; gap: var(--u-1); flex-wrap: wrap; }
+.dm-form-state { margin-right: auto; font-size: var(--fs-xs); color: var(--ink-muted); font-weight: 500; }
+.dm-pin-wrap { background: none; border: none; }
+.dm-pin { display: block; width: 16px; height: 16px; border-radius: 50%; border: 3px solid #fff; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35); }
